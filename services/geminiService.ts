@@ -1,8 +1,9 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
 import {
   IngredientImage,
   ProjectAsset,
@@ -10,126 +11,94 @@ import {
   Shot,
   VeoShot,
   VeoShotWrapper,
+  McpTool,
 } from '../types';
 
-// Initialize AI client helper
 const getAiClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- SYSTEM PROMPTS ---
-
-const SYSTEM_PROMPT_PROJECT_NAME = `
-You are a creative assistant. Your task is to read the provided creative script or treatment and generate a short, descriptive, filesystem-safe project name.
-The name should be in kebab-case (all lowercase, words separated by hyphens).
-For example, if the script is about a robot detective in neo-tokyo, a good name would be 'robot-detective-neo-tokyo'.
-The name should be concise, ideally 2-5 words.
-Your output MUST be only the generated name string, with no other text or explanation.
-`;
-
-const SYSTEM_PROMPT_SHOTLIST = `
-You are a Script Analysis Engine. Your task is to break down the provided creative input (script, treatment, or concept) into a sequence of discrete shots.
-For each shot, provide a unique 'shot_id' (e.g., 'ep1_scene1_shot1') and a concise, 1-2 sentence natural language 'pitch' describing the shot's action and mood.
-Your final output MUST be a single, valid JSON array of objects, where each object contains only the 'shot_id' and 'pitch' keys. Do not output any other text or explanation.
-`;
-
-const SYSTEM_PROMPT_SCENE_NAME = `
-You are a creative assistant. Your task is to analyze the provided script context and a list of shot pitches that belong to a single scene, then generate a short, descriptive, filesystem-safe name for that scene.
-The name should be in kebab-case (all lowercase, words separated by hyphens).
-For example, if the shots describe a chase across rooftops, a good name would be 'rooftop-chase'.
-The name should be concise, ideally 2-4 words.
-Your output MUST be only the generated name string, with no other text or explanation.
-`;
-
-const SYSTEM_PROMPT_SCENE_PLAN = `
-You are a Scene Runtime Planner. Your task is to analyze a creative script and the pitches for shots within a specific scene to produce a coherent JSON scene plan. This plan defines the narrative beats, their target durations, and the rules for extending shots to create longer, continuous sequences.
-Your goal is to maximize segment duration and continuity while adhering to the scene's narrative goals.
-You MUST follow the provided JSON schema strictly.
-`;
-
-const SYSTEM_PROMPT_ASSET_EXTRACTION = `
-You are a Production Designer AI. Your task is to analyze the provided script and identify the key visual assets required for generation.
-Specifically, identify:
-1. Main CHARACTERS.
-2. Primary LOCATIONS/ENVIRONMENTS.
-3. Significant PROPS (objects central to the plot or action).
-4. Distinct visual STYLES (e.g., "Flashback Sequence", "Thermal Vision", "Sketch Style").
-
-For each asset, provide a short, reliable 'name' and a visual 'description' that could be used to prompt an image generator or help a user select a reference photo.
-
-Rules:
-1. Only identify assets that appear frequently or are visually distinct.
-2. The 'type' must be one of: 'character', 'location', 'prop', 'style'.
-3. Output a JSON array of objects.
-`;
+const SYSTEM_PROMPT_PROJECT_NAME = `You are a creative assistant. Generate a short, filesystem-safe kebab-case project name. Output ONLY the string.`;
+const SYSTEM_PROMPT_SHOTLIST = `Break the script into discrete shots. Output a JSON array of {shot_id, pitch}.`;
+const SYSTEM_PROMPT_SCENE_NAMES = `Generate kebab-case names for scenes. Output JSON mapping IDs to names.`;
+const SYSTEM_PROMPT_SCENE_PLAN = `Generate a JSON scene plan defining narrative beats and extension policies.`;
+const SYSTEM_PROMPT_ASSET_EXTRACTION = `Identify characters, locations, props, and styles from the script. Output JSON array.`;
 
 const SYSTEM_PROMPT_SINGLE_SHOT_JSON = `
-You are the DIRECTOR'S FIRST AD AGENT - a Script Analysis Engine that transforms unstructured creative input into structured production specifications optimized for Google’s VEO3.1 video generation system.
-YOUR TASK:
-1. Read the user's FULL SCRIPT CONTEXT and the SCENE PLAN provided.
-2. Based on the FULL SCRIPT CONTEXT, the SCENE PLAN, and the specific PITCH for a single shot, generate ONE complete, valid JSON object that conforms to the WRAPPER_SCHEMA.
-3. You MUST use the "extend" unit_type when the SCENE PLAN's 'extend_policy' criteria are met. Otherwise, use the "shot" unit_type.
-4. The 'shot_id' in the nested 'veo_shot' object MUST EXACTLY MATCH the provided shot_id.
-5. IMPORTANT: Your response MUST be valid JSON. Do NOT repeat the script or scene context in your output. Be concise.
+You are the Director's First AD and VEO 3.1 Technical Expert. 
+Your goal is to generate a PRODUCTION-READY JSON for a specific shot.
 
---- WRAPPER_SCHEMA ---
-{
-  "unit_type": "'shot' | 'extend'",
-  "chain_id": "OPTIONAL_STRING",
-  "segment_number": "OPTIONAL_INTEGER",
-  "segment_count": "OPTIONAL_INTEGER",
-  "target_duration_s": "OPTIONAL_INTEGER",
-  "stitching_notes": "OPTIONAL_STRING",
-  "clip_strategy": "OPTIONAL_STRING",
-  "directorNotes": "OPTIONAL_STRING",
-  "veo_shot": {
-      "shot_id": "STRING",
-      "scene": { "context": "STRING", "visual_style": "STRING", "lighting": "STRING", "mood": "STRING", "aspect_ratio": "16:9|9:16", "duration_s": 4|6|8 },
-      "character": { "name": "STRING", "gender_age": "STRING", "description_lock": "STRING", "behavior": "STRING", "expression": "STRING" },
-      "camera": { "shot_call": "STRING", "movement": "STRING", "negatives": "STRING" },
-      "audio": { "dialogue": "STRING", "delivery": "STRING", "ambience": "STRING", "sfx": "STRING" },
-      "flags": { "continuity_lock": BOOLEAN, "do_not": [], "anti_artifacts": [], "conflicts": [], "warnings": [], "cv_updates": [] }
-  }
-}
+VEO 3.1 LOGIC RULES:
+1. duration_s: MUST be exactly 4, 6, or 8.
+2. unit_type: 
+   - 'shot': For a new, standalone clip.
+   - 'extend': For clips that MUST continue the action of a previous segment.
+3. SEGMENTATION & CHAINS:
+   - If a shot pitch implies a long action (e.g., 12 seconds), use a chain.
+   - Set 'segment_count' to the total number of clips needed (e.g., 3 clips of 4s).
+   - Set 'segment_number' to the current index (1-based).
+   - Set 'chain_id' to a unique string shared by all segments in this specific action sequence.
+   - CRITICAL: Each segment's 'duration_s' (4, 6, or 8) is for THAT segment only. Do NOT output a 4s total duration for a 3-segment chain unless the intention is 1.3s per clip (which is invalid).
+4. CONTINUITY:
+   - Use 'description_lock' to provide a consistent visual "anchor" description of characters.
+   - Ensure 'visual_style' is identical across all shots in a scene.
+5. CAMERA: Use specific shot calls (e.g., 'Close-up', 'Wide Shot', 'Low Angle').
+
+Output ONLY valid JSON matching the VeoShotWrapper schema.
 `;
 
-const SYSTEM_PROMPT_REFINE_JSON = `
-You are a Senior VEO Director. Your task is to modify an existing VEO Shot JSON based on the user's "Director's Feedback".
-1. Read the 'CURRENT_JSON' and the 'DIRECTOR_FEEDBACK'.
-2. Update the specific fields in the JSON that need to change to satisfy the feedback.
-3. Leave all other fields exactly as they are to maintain continuity.
-4. Return the FULL, VALID JSON object.
-`;
+const SYSTEM_PROMPT_REFINE_JSON = `Update a VEO JSON based on director feedback while maintaining continuity. Maintain the same chain_id and segment logic unless the feedback specifically asks for a duration/timing change.`;
+const SYSTEM_PROMPT_KEYFRAME_TEXT = `Convert VEO JSON into a natural language image generation prompt. Focus on the visual composition, lighting, and character appearance.`;
 
-const SYSTEM_PROMPT_KEYFRAME_TEXT = `
-You are a Visual Prompt Engineer. Your task is to convert a structured VEO Shot JSON object into a highly descriptive, natural language image generation prompt.
-Focus on visual details: lighting, composition, subject appearance, background, and style.
-Do not include technical JSON keys or brackets in the output. Just the descriptive text.
-`;
+/**
+ * Maps shot data to a specific MCP tool call using Gemini's reasoning.
+ */
+export const executeMcpAction = async (shot: Shot, tools: McpTool[]) => {
+  const ai = getAiClient();
+  
+  const functionDeclarations: FunctionDeclaration[] = tools.map(tool => ({
+    name: tool.name,
+    parameters: tool.inputSchema,
+  }));
 
-// --- API FUNCTIONS ---
+  const prompt = `
+    You are an integration agent for DaVinci Resolve.
+    Task: Take the following shot information and use the available tools to sync it to Resolve.
+    
+    Shot ID: ${shot.id}
+    Pitch: ${shot.pitch}
+    Scene: ${shot.sceneName || 'Unknown'}
+    VEO JSON: ${JSON.stringify(shot.veoJson || {})}
+    Video URL: ${shot.veoVideoUrl || 'N/A'}
+
+    Decide which tool to call (e.g., import_media, add_to_timeline, create_marker) and with what arguments.
+  `;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-pro-preview',
+    contents: prompt,
+    config: {
+      tools: [{ functionDeclarations }],
+    },
+  });
+
+  return response.functionCalls || [];
+};
 
 export const generateProjectName = async (script: string) => {
   const ai = getAiClient();
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: script,
-    config: {
-      systemInstruction: SYSTEM_PROMPT_PROJECT_NAME,
-      temperature: 0.7,
-    },
+    config: { systemInstruction: SYSTEM_PROMPT_PROJECT_NAME, temperature: 0.7 },
   });
-
   return {
-    result: response.text?.trim() || 'untitled-project',
-    tokens: {
-      input: response.usageMetadata?.promptTokenCount || 0,
-      output: response.usageMetadata?.candidatesTokenCount || 0,
-    },
+    result: (response.text || '').trim() || 'untitled-project',
+    tokens: { input: response.usageMetadata?.promptTokenCount || 0, output: response.usageMetadata?.candidatesTokenCount || 0 },
   };
 };
 
 export const generateShotList = async (script: string) => {
   const ai = getAiClient();
-  // Using gemini-3-pro-preview for reasoning
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: script,
@@ -140,88 +109,61 @@ export const generateShotList = async (script: string) => {
         type: Type.ARRAY,
         items: {
           type: Type.OBJECT,
-          properties: {
-            shot_id: { type: Type.STRING },
-            pitch: { type: Type.STRING },
-          },
+          properties: { shot_id: { type: Type.STRING }, pitch: { type: Type.STRING } },
           required: ['shot_id', 'pitch'],
         },
       },
     },
   });
-
   const text = response.text || '[]';
   let result: any[] = [];
   try {
     const parsed = JSON.parse(text);
     if (Array.isArray(parsed)) {
-       // Map shot_id to id for the application
        result = parsed.map((item: any) => ({
-           id: item.shot_id, // Map shot_id to id
+           id: item.shot_id,
            pitch: item.pitch,
-           shot_id: item.shot_id // Keep original
-       })).filter(item => item.id && item.pitch);
+           shot_id: item.shot_id
+       })).filter(item => (item.id || '') && (item.pitch || ''));
     }
-  } catch (e) {
-    console.error("Failed to parse shot list JSON", e);
-  }
-
+  } catch (e) { console.error(e); }
   return {
     result,
-    tokens: {
-      input: response.usageMetadata?.promptTokenCount || 0,
-      output: response.usageMetadata?.candidatesTokenCount || 0,
-    },
+    tokens: { input: response.usageMetadata?.promptTokenCount || 0, output: response.usageMetadata?.candidatesTokenCount || 0 },
   };
 };
 
 export const generateSceneNames = async (shotList: {id: string}[], script: string) => {
     const ai = getAiClient();
-    // Group shots by scene
     const sceneGroups = new Map<string, string[]>();
     shotList.forEach(shot => {
          if (!shot.id) return;
-         // Assuming shot_id format contains scene info, typically separated by underscore
          const lastUnderscore = shot.id.lastIndexOf('_');
-         // If underscore found, use prefix, otherwise use whole ID
          const sceneId = lastUnderscore !== -1 ? shot.id.substring(0, lastUnderscore) : shot.id;
          sceneGroups.set(sceneId, []);
     });
-    
     const sceneIds = Array.from(sceneGroups.keys());
     const prompt = `List of Scene IDs: ${JSON.stringify(sceneIds)}\n\nScript Context: ${script.substring(0, 5000)}...`;
-    
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
         config: {
-            systemInstruction: `You are given a list of Scene IDs and a script. For each Scene ID, generate a concise, kebab-case descriptive name. Output a JSON object where keys are Scene IDs and values are the names.`,
+            systemInstruction: `Map Scene IDs to kebab-case names. Output JSON.`,
             responseMimeType: 'application/json',
-             responseSchema: {
-                type: Type.OBJECT,
-                properties: sceneIds.reduce((acc, id) => ({...acc, [id]: { type: Type.STRING }}), {})
-             }
+            responseSchema: {
+               type: Type.OBJECT,
+               properties: sceneIds.reduce((acc, id) => ({...acc, [id]: { type: Type.STRING }}), {})
+            }
         }
     });
-    
     let names = new Map<string, string>();
     try {
         const json = JSON.parse(response.text || '{}');
         Object.entries(json).forEach(([k, v]) => names.set(k, v as string));
-    } catch(e) {
-        console.error("Failed to parse scene names", e);
-        sceneIds.forEach(id => names.set(id, id));
-    }
-
+    } catch(e) { sceneIds.forEach(id => names.set(id, id)); }
     return {
-        result: {
-            names,
-            sceneCount: sceneIds.length
-        },
-        tokens: {
-            input: response.usageMetadata?.promptTokenCount || 0,
-            output: response.usageMetadata?.candidatesTokenCount || 0,
-        }
+        result: { names, sceneCount: sceneIds.length },
+        tokens: { input: response.usageMetadata?.promptTokenCount || 0, output: response.usageMetadata?.candidatesTokenCount || 0 }
     }
 };
 
@@ -239,130 +181,35 @@ export const generateScenePlan = async (sceneId: string, scenePitches: string, s
                     scene_id: { type: Type.STRING },
                     scene_title: { type: Type.STRING },
                     goal_runtime_s: { type: Type.INTEGER },
-                    beats: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                beat_id: { type: Type.STRING },
-                                label: { type: Type.STRING },
-                                priority: { type: Type.NUMBER },
-                                min_s: { type: Type.NUMBER },
-                                max_s: { type: Type.NUMBER },
-                            },
-                            required: ['beat_id', 'label', 'priority', 'min_s', 'max_s']
-                        }
-                    },
-                    extend_policy: {
-                        type: Type.OBJECT,
-                        properties: {
-                            allow_extend: { type: Type.BOOLEAN },
-                            extend_granularity_s: { type: Type.NUMBER },
-                            criteria: { type: Type.ARRAY, items: { type: Type.STRING } }
-                        },
-                        required: ['allow_extend', 'extend_granularity_s', 'criteria']
-                    }
+                    beats: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { beat_id: { type: Type.STRING }, label: { type: Type.STRING }, priority: { type: Type.NUMBER }, min_s: { type: Type.NUMBER }, max_s: { type: Type.NUMBER } }, required: ['beat_id', 'label', 'priority', 'min_s', 'max_s'] } },
+                    extend_policy: { type: Type.OBJECT, properties: { allow_extend: { type: Type.BOOLEAN }, extend_granularity_s: { type: Type.NUMBER }, criteria: { type: Type.ARRAY, items: { type: Type.STRING } } }, required: ['allow_extend', 'extend_granularity_s', 'criteria'] }
                 },
                 required: ['scene_id', 'scene_title', 'goal_runtime_s', 'beats', 'extend_policy']
             }
         }
     });
-
-    let result: ScenePlan;
-    try {
-        result = JSON.parse(response.text || '{}');
-    } catch(e) {
-        console.error("Failed to parse scene plan", e);
-        // Fallback or rethrow
-        throw new Error("Invalid Scene Plan JSON");
-    }
-
-    return {
-        result,
-        tokens: {
-            input: response.usageMetadata?.promptTokenCount || 0,
-            output: response.usageMetadata?.candidatesTokenCount || 0
-        }
-    };
+    return { result: JSON.parse(response.text || '{}'), tokens: { input: response.usageMetadata?.promptTokenCount || 0, output: response.usageMetadata?.candidatesTokenCount || 0 } };
 };
 
 export const generateVeoJson = async (pitch: string, shotId: string, script: string, scenePlan: ScenePlan | null) => {
     const ai = getAiClient();
-    const scenePlanContext = scenePlan ? JSON.stringify(scenePlan) : "No Scene Plan";
-    const content = `SHOT ID: ${shotId}\nPITCH: ${pitch}\nSCENE PLAN: ${scenePlanContext}\nSCRIPT: ${script}`;
-    
+    const content = `SHOT ID: ${shotId}\nPITCH: ${pitch}\nSCENE PLAN: ${JSON.stringify(scenePlan || {})}\nSCRIPT: ${script}`;
     const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: content,
-        config: {
-            systemInstruction: SYSTEM_PROMPT_SINGLE_SHOT_JSON,
-            responseMimeType: 'application/json',
-            maxOutputTokens: 8192, // Increased limit
-            temperature: 0.7
-        }
+        config: { systemInstruction: SYSTEM_PROMPT_SINGLE_SHOT_JSON, responseMimeType: 'application/json', maxOutputTokens: 8192, temperature: 0.7 }
     });
-
-    let result: VeoShotWrapper;
-    try {
-        result = JSON.parse(response.text || '{}');
-    } catch(e) {
-        console.error("Failed to parse VEO JSON", e);
-        
-        // Attempt very basic repair if valid JSON was cut off
-        const raw = response.text || '';
-        if (raw.trim().startsWith('{') && !raw.trim().endsWith('}')) {
-             try {
-                // Try closing braces blindly
-                result = JSON.parse(raw + '}');
-             } catch(e2) {
-                 try {
-                     result = JSON.parse(raw + '}}');
-                 } catch (e3) {
-                     throw new Error("Invalid VEO JSON");
-                 }
-             }
-        } else {
-             throw new Error("Invalid VEO JSON");
-        }
-    }
-    
-    return {
-        result,
-        tokens: {
-            input: response.usageMetadata?.promptTokenCount || 0,
-            output: response.usageMetadata?.candidatesTokenCount || 0
-        }
-    }
+    return { result: JSON.parse(response.text || '{}'), tokens: { input: response.usageMetadata?.promptTokenCount || 0, output: response.usageMetadata?.candidatesTokenCount || 0 } };
 };
 
 export const refineVeoJson = async (currentJson: VeoShotWrapper, feedback: string) => {
     const ai = getAiClient();
-    const content = `CURRENT_JSON: ${JSON.stringify(currentJson, null, 2)}\n\nDIRECTOR_FEEDBACK: ${feedback}`;
-    
     const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: content,
-        config: {
-            systemInstruction: SYSTEM_PROMPT_REFINE_JSON,
-            responseMimeType: 'application/json',
-            maxOutputTokens: 8192,
-        }
+        contents: `CURRENT_JSON: ${JSON.stringify(currentJson, null, 2)}\n\nDIRECTOR_FEEDBACK: ${feedback}`,
+        config: { systemInstruction: SYSTEM_PROMPT_REFINE_JSON, responseMimeType: 'application/json', maxOutputTokens: 8192 }
     });
-    
-    let result: VeoShotWrapper;
-    try {
-        result = JSON.parse(response.text || '{}');
-    } catch(e) {
-        throw new Error("Failed to refine JSON.");
-    }
-
-    return {
-        result,
-        tokens: {
-            input: response.usageMetadata?.promptTokenCount || 0,
-            output: response.usageMetadata?.candidatesTokenCount || 0
-        }
-    };
+    return { result: JSON.parse(response.text || '{}'), tokens: { input: response.usageMetadata?.promptTokenCount || 0, output: response.usageMetadata?.candidatesTokenCount || 0 } };
 };
 
 export const extractAssetsFromScript = async (script: string) => {
@@ -375,135 +222,28 @@ export const extractAssetsFromScript = async (script: string) => {
             responseMimeType: 'application/json',
             responseSchema: {
                 type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                         id: { type: Type.STRING },
-                         name: { type: Type.STRING },
-                         description: { type: Type.STRING },
-                         type: { type: Type.STRING, enum: ['character', 'location', 'prop', 'style'] }
-                    },
-                    required: ['name', 'description', 'type']
-                }
+                items: { type: Type.OBJECT, properties: { id: { type: Type.STRING }, name: { type: Type.STRING }, description: { type: Type.STRING }, type: { type: Type.STRING, enum: ['character', 'location', 'prop', 'style'] } }, required: ['name', 'description', 'type'] }
             }
         }
     });
-    
-    let rawAssets: any[] = [];
-    try {
-        rawAssets = JSON.parse(response.text || '[]');
-    } catch (e) {
-        console.error("Failed to parse assets", e);
-    }
-    
-    // Post-process to add IDs (if missing) and null images
-    const result: ProjectAsset[] = rawAssets.map((a, i) => ({
-        id: a.id || `auto-${Date.now()}-${i}`,
-        name: a.name,
-        description: a.description,
-        type: a.type as any,
-        image: null
-    }));
-
-    return {
-        result,
-        tokens: {
-            input: response.usageMetadata?.promptTokenCount || 0,
-            output: response.usageMetadata?.candidatesTokenCount || 0
-        }
-    };
+    const result = JSON.parse(response.text || '[]').map((a: any, i: number) => ({ id: a.id || `auto-${Date.now()}-${i}`, name: a.name, description: a.description, type: a.type as any, image: null }));
+    return { result, tokens: { input: response.usageMetadata?.promptTokenCount || 0, output: response.usageMetadata?.candidatesTokenCount || 0 } };
 };
 
 export const generateKeyframePromptText = async (veoShot: VeoShot) => {
     const ai = getAiClient();
-    const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: JSON.stringify(veoShot),
-        config: {
-            systemInstruction: SYSTEM_PROMPT_KEYFRAME_TEXT,
-        }
-    });
-    
-    return {
-        result: response.text || '',
-        tokens: {
-            input: response.usageMetadata?.promptTokenCount || 0,
-            output: response.usageMetadata?.candidatesTokenCount || 0
-        }
-    }
+    const response = await ai.models.generateContent({ model: 'gemini-3-pro-preview', contents: JSON.stringify(veoShot), config: { systemInstruction: SYSTEM_PROMPT_KEYFRAME_TEXT } });
+    return { result: response.text || '', tokens: { input: response.usageMetadata?.promptTokenCount || 0, output: response.usageMetadata?.candidatesTokenCount || 0 } };
 };
 
 export const generateKeyframeImage = async (prompt: string, ingredientImages: IngredientImage[], aspectRatio: string) => {
     const ai = getAiClient();
-    
     const parts: any[] = [{ text: prompt }];
-    
-    // Add image parts if available
-    ingredientImages.forEach(img => {
-        parts.push({
-            inlineData: {
-                mimeType: img.mimeType,
-                data: img.base64
-            }
-        });
-    });
-
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-pro-image-preview',
-            contents: { parts },
-            config: {
-                 imageConfig: {
-                     aspectRatio: aspectRatio as any // "16:9" | "9:16" | "1:1" etc.
-                 }
-            }
-        });
-        
-        let imageBase64 = null;
-        const candidates = response.candidates;
-        if (candidates && candidates.length > 0) {
-            for (const part of candidates[0].content.parts) {
-                if (part.inlineData) {
-                    imageBase64 = part.inlineData.data;
-                    break;
-                }
-            }
-        }
-
-        if (!imageBase64) {
-            throw new Error("No image generated.");
-        }
-        return { result: imageBase64 };
-
-    } catch (error) {
-        console.warn("Gemini 3 Pro Image failed, attempting fallback to Gemini 2.5 Flash Image...", error);
-        
-        // FALLBACK: Gemini 2.5 Flash Image
-        // NOTE: Does not support imageSize, but supports aspectRatio and reference images.
-        const fallbackResponse = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: { parts },
-            config: {
-                 imageConfig: {
-                     aspectRatio: aspectRatio as any
-                 }
-            }
-        });
-
-        let imageBase64 = null;
-        const candidates = fallbackResponse.candidates;
-        if (candidates && candidates.length > 0) {
-            for (const part of candidates[0].content.parts) {
-                if (part.inlineData) {
-                    imageBase64 = part.inlineData.data;
-                    break;
-                }
-            }
-        }
-
-        if (!imageBase64) {
-             throw new Error("Fallback image generation failed.");
-        }
-        return { result: imageBase64 };
+    ingredientImages.forEach(img => parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } }));
+    const response = await ai.models.generateContent({ model: 'gemini-3-pro-image-preview', contents: { parts }, config: { imageConfig: { aspectRatio: (aspectRatio || '16:9') as any } } });
+    let imageBase64 = null;
+    if (response.candidates?.[0]?.content?.parts) {
+        for (const part of response.candidates[0].content.parts) { if (part.inlineData) { imageBase64 = part.inlineData.data; break; } }
     }
+    return { result: imageBase64 };
 };

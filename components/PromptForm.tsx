@@ -12,7 +12,7 @@ import {
   FileAudioIcon, // New import
 } from './icons';
 import AssetLibrary from './AssetLibrary';
-import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
+import * as pdfjsLib from 'pdfjs-dist';
 import { transcribeAudio } from '../services/audioService'; // New import
 
 // Setup PDF.js worker from a CDN. The mjs build is required for modules.
@@ -93,8 +93,8 @@ const ProjectSetupForm: React.FC<ProjectSetupFormProps> = ({
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
             const pageText = textContent.items
-              .filter((item): item is {str: string} => 'str' in item)
-              .map((item) => item.str)
+              .filter((item: any): item is {str: string} => 'str' in item)
+              .map((item: any) => item.str)
               .join(' ');
             pageTexts.push(pageText);
           }
