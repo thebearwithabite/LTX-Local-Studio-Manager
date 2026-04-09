@@ -313,6 +313,7 @@ const getImageBase64 = (response: GenerateContentResponse): string => {
 interface GenerateResult<T> {
   result: T;
   tokens: { input: number; output: number; };
+  thoughts?: string;
 }
 
 /**
@@ -473,21 +474,34 @@ export const generateSceneNames = async (
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
 
-  for (const [sceneId, shots] of scenes.entries()) {
+  const scenePromises = Array.from(scenes.entries()).map(async ([sceneId, shots]) => {
     const pitches = shots.map((s) => `- ${s.pitch}`).join('\n');
     const prompt = `SHOTS IN SCENE "${sceneId}":\n${pitches}\n\nSCRIPT CONTEXT:\n${script.substring(0, 5000)}`;
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: { systemInstruction: SYSTEM_PROMPT_SCENE_NAME },
+      config: { 
+        systemInstruction: SYSTEM_PROMPT_SCENE_NAME,
+        thinkingConfig: { includeThoughts: true }
+      },
     });
 
-    totalInputTokens += response.usageMetadata?.promptTokenCount || 0;
-    totalOutputTokens += response.usageMetadata?.candidatesTokenCount || 0;
+    return {
+      sceneId,
+      sceneName: (response.text || '').trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+      inputTokens: response.usageMetadata?.promptTokenCount || 0,
+      outputTokens: response.usageMetadata?.candidatesTokenCount || 0,
+      thoughts: (response as any).thoughts
+    };
+  });
 
-    const sceneName = (response.text || '').trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    sceneNames.set(sceneId, sceneName || sceneId);
-  }
+  const results = await Promise.all(scenePromises);
+  
+  results.forEach(res => {
+    totalInputTokens += res.inputTokens;
+    totalOutputTokens += res.outputTokens;
+    sceneNames.set(res.sceneId, res.sceneName || res.sceneId);
+  });
 
   return {
     result: { names: sceneNames, sceneCount: scenes.size },
@@ -547,7 +561,8 @@ export const generateScenePlan = async (
     tokens: {
       input: response.usageMetadata?.promptTokenCount || 0,
       output: response.usageMetadata?.candidatesTokenCount || 0,
-    }
+    },
+    thoughts: (response as any).thoughts
   };
 };
 

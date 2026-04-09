@@ -113,7 +113,11 @@ const ShotCard: React.FC<ShotCardProps> = ({
             {shot.veoStatus === VeoStatus.COMPLETED && shot.veoVideoUrl ? (
                 <video src={shot.veoVideoUrl} controls className="w-full h-full object-cover" />
             ) : shot.keyframeImage ? (
-              <img src={`data:image/png;base64,${shot.keyframeImage}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <img 
+                src={shot.keyframeImage.startsWith('http') ? shot.keyframeImage : `data:image/png;base64,${shot.keyframeImage}`} 
+                className="w-full h-full object-cover" 
+                referrerPolicy="no-referrer" 
+              />
             ) : (
               <div className="flex flex-col items-center text-gray-500"><FilmIcon className="w-12 h-12 mb-2" /><span className="text-sm">No Preview</span></div>
             )}
@@ -134,9 +138,17 @@ const ShotCard: React.FC<ShotCardProps> = ({
                         </button>
                     )}
                     <button 
-                        onClick={() => {
+                        onClick={async () => {
+                            let href = shot.keyframeImage!;
+                            if (href.startsWith('http')) {
+                                const response = await fetch(href);
+                                const blob = await response.blob();
+                                href = URL.createObjectURL(blob);
+                            } else {
+                                href = `data:image/png;base64,${href}`;
+                            }
                             const a = document.createElement('a');
-                            a.href = `data:image/png;base64,${shot.keyframeImage}`;
+                            a.href = href;
                             a.download = `${shot.id}_keyframe.png`;
                             a.click();
                         }}
@@ -191,7 +203,10 @@ const ShotCard: React.FC<ShotCardProps> = ({
                                     onClick={() => onToggleGuidanceForShot(shot.id, f.id)}
                                     className={`aspect-square rounded border-2 overflow-hidden transition-all ${selectedGuidanceIds.includes(f.id) ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-transparent opacity-60 hover:opacity-100'}`}
                                 >
-                                    <img src={`data:image/png;base64,${f.image.base64}`} className="w-full h-full object-cover" />
+                                    <img 
+                                        src={f.image.base64.startsWith('http') ? f.image.base64 : `data:image/png;base64,${f.image.base64}`} 
+                                        className="w-full h-full object-cover" 
+                                    />
                                 </button>
                             ))}
                         </div>
@@ -293,7 +308,7 @@ const ShotCard: React.FC<ShotCardProps> = ({
                                       }}
                                   >
                                       <img 
-                                          src={`data:image/png;base64,${img}`} 
+                                          src={img.startsWith('http') ? img : `data:image/png;base64,${img}`} 
                                           alt={`Version ${idx + 1}`}
                                           className="w-full h-full object-cover"
                                       />
@@ -306,10 +321,18 @@ const ShotCard: React.FC<ShotCardProps> = ({
                                           v{idx + 1}
                                       </div>
                                       <button 
-                                          onClick={(e) => {
+                                          onClick={async (e) => {
                                               e.stopPropagation();
+                                              let href = img;
+                                              if (href.startsWith('http')) {
+                                                  const response = await fetch(href);
+                                                  const blob = await response.blob();
+                                                  href = URL.createObjectURL(blob);
+                                              } else {
+                                                  href = `data:image/png;base64,${href}`;
+                                              }
                                               const a = document.createElement('a');
-                                              a.href = `data:image/png;base64,${img}`;
+                                              a.href = href;
                                               a.download = `${shot.id}_v${idx + 1}.png`;
                                               a.click();
                                           }}
@@ -355,6 +378,7 @@ interface ShotBookDisplayProps {
   allAssets: ProjectAsset[];
   onToggleAssetForShot: (shotId: string, assetId: string) => void;
   onSaveProject: () => void;
+  onLoadProject: (json: string) => void;
   onExportPackage: () => void;
   onShowStorageInfo: () => void;
   isProcessing: boolean;
@@ -380,6 +404,8 @@ const ShotBookDisplay: React.FC<ShotBookDisplayProps> = ({
   shotBook,
   logEntries,
   projectName,
+  scenePlans,
+  apiCallSummary,
   onNewProject,
   onReset,
   onUpdateShot,
@@ -388,6 +414,7 @@ const ShotBookDisplay: React.FC<ShotBookDisplayProps> = ({
   allAssets,
   onToggleAssetForShot,
   onSaveProject,
+  onLoadProject,
   onExportPackage,
   onShowStorageInfo,
   isProcessing,
@@ -426,7 +453,13 @@ const ShotBookDisplay: React.FC<ShotBookDisplayProps> = ({
       <header className="flex-shrink-0 bg-[#1f1f1f] border border-gray-700 rounded-2xl shadow-lg p-4 flex flex-col md:flex-row justify-between items-center gap-4">
         <div className="flex items-center gap-4">
           <h2 className="text-2xl font-bold text-white">{projectName || 'Untitled Project'}</h2>
-          <span className="px-2 py-0.5 bg-indigo-900/50 text-indigo-400 text-[10px] font-bold rounded uppercase border border-indigo-700">Production Mode</span>
+          <div className="flex flex-col">
+            <span className="px-2 py-0.5 bg-indigo-900/50 text-indigo-400 text-[10px] font-bold rounded uppercase border border-indigo-700">Production Mode</span>
+            <div className="mt-1 flex items-center gap-2">
+                <span className="text-[10px] text-gray-500 font-mono">EST. COST:</span>
+                <span className="text-[10px] text-green-400 font-mono font-bold">${((apiCallSummary.proTokens.input / 1000000) * 7 + (apiCallSummary.proTokens.output / 1000000) * 21 + (apiCallSummary.flashTokens.input / 1000000) * 0.35 + (apiCallSummary.flashTokens.output / 1000000) * 1.05 + apiCallSummary.image * 0.005).toFixed(4)}</span>
+            </div>
+          </div>
         </div>
         <div className="flex flex-wrap gap-3 justify-center items-center">
           <div className="relative">
@@ -464,8 +497,39 @@ const ShotBookDisplay: React.FC<ShotBookDisplayProps> = ({
               <SparklesIcon className="w-4 h-4" />
               Generate All Keyframes
           </button>
-          <button onClick={onSaveProject} className="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white font-semibold rounded-lg text-sm">Save Backup</button>
-          <button onClick={onDownloadKeyframesZip} className="px-4 py-2 bg-indigo-900/40 hover:bg-indigo-900/60 text-indigo-300 font-semibold rounded-lg text-sm border border-indigo-800/50">Download All Images</button>
+          <div className="flex flex-col gap-2">
+              <button onClick={onSaveProject} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-sm flex items-center gap-2">
+                  <SaveIcon className="w-4 h-4" />
+                  Save Project (.json)
+              </button>
+              <button 
+                  onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = '.json';
+                      input.onchange = (e) => {
+                          const file = (e.target as HTMLInputElement).files?.[0];
+                          if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (re) => {
+                                  const content = re.target?.result as string;
+                                  onLoadProject(content);
+                              };
+                              reader.readAsText(file);
+                          }
+                      };
+                      input.click();
+                  }} 
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg text-sm flex items-center gap-2"
+              >
+                  <UploadCloudIcon className="w-4 h-4" />
+                  Load Project (.json)
+              </button>
+          </div>
+          <button onClick={onDownloadKeyframesZip} className="px-4 py-2 bg-indigo-900/40 hover:bg-indigo-900/60 text-indigo-300 font-semibold rounded-lg text-sm border border-indigo-800/50 flex items-center gap-2">
+              <DownloadIcon className="w-4 h-4" />
+              Download All Images
+          </button>
           <button onClick={onExportPackage} className="px-4 py-2 bg-green-700 hover:bg-green-600 text-white font-semibold rounded-lg text-sm border border-green-500">Export ZIP Package</button>
           <button onClick={onShowStorageInfo} className="p-2 bg-gray-800 border border-gray-600 text-gray-400 hover:text-white rounded-lg transition-all" title="Storage Info">
               <InfoIcon className="w-5 h-5" />
@@ -495,7 +559,11 @@ const ShotBookDisplay: React.FC<ShotBookDisplayProps> = ({
                 <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
                     {guidanceFrames.map(f => (
                         <div key={f.id} className="relative aspect-square bg-black rounded border border-gray-600 group overflow-hidden">
-                            <img src={`data:image/png;base64,${f.image.base64}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            <img 
+                                src={f.image.base64.startsWith('http') ? f.image.base64 : `data:image/png;base64,${f.image.base64}`} 
+                                className="w-full h-full object-cover" 
+                                referrerPolicy="no-referrer" 
+                            />
                             <button 
                                 onClick={() => onRemoveGuidanceFrame(f.id)}
                                 className="absolute top-1 right-1 p-0.5 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"

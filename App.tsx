@@ -51,8 +51,29 @@ import {
   VeoStatus,
   McpServerConfig,
   GuidanceFrame,
+  GEMINI_PRO_INPUT_COST_PER_MILLION_TOKENS,
+  GEMINI_PRO_OUTPUT_COST_PER_MILLION_TOKENS,
+  GEMINI_FLASH_INPUT_COST_PER_MILLION_TOKENS,
+  GEMINI_FLASH_OUTPUT_COST_PER_MILLION_TOKENS,
+  IMAGEN_COST_PER_IMAGE,
 } from './types';
 import { metadata } from './metadata';
+import { auth, db, storage } from './firebase';
+import { 
+  doc, 
+  setDoc, 
+  getDoc, 
+  collection, 
+  onSnapshot,
+  query,
+  where
+} from 'firebase/firestore';
+import { 
+  ref, 
+  uploadString, 
+  getDownloadURL 
+} from 'firebase/storage';
+import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const API_CALL_DELAY_MS = 1200;
@@ -99,6 +120,118 @@ const App: React.FC = () => {
     pro: 0, flash: 0, image: 0, proTokens: {input: 0, output: 0}, flashTokens: {input: 0, output: 0}
   });
   const hasWarnedLargeProject = useRef(false);
+  const [currentThoughts, setCurrentThoughts] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
+
+  // Firebase Auth
+  useEffect(() => {
+    onAuthStateChanged(auth, (u) => {
+      if (u) {
+        setUser(u);
+      } else {
+        signInAnonymously(auth).catch(console.error);
+      }
+    });
+  }, []);
+
+  const uploadImageToStorage = async (base64: string, path: string) => {
+    const storageRef = ref(storage, path);
+    await uploadString(storageRef, base64, 'base64');
+    return await getDownloadURL(storageRef);
+  };
+
+  const saveProjectToFirebase = async (force: boolean = false) => {
+    if (!user || !projectName) return;
+    if (!force && appState !== AppState.SUCCESS && assets.length === 0) return;
+
+    try {
+      const projectRef = doc(db, 'projects', projectName);
+      
+      // Upload Assets
+      const updatedAssets = await Promise.all(assets.map(async (asset) => {
+        if (asset.image && asset.image.base64.length > 1000) { // Only upload if it's base64, not a URL already
+          const url = await uploadImageToStorage(asset.image.base64, `projects/${projectName}/assets/${asset.id}`);
+          return { ...asset, image: { ...asset.image, base64: url } }; // We'll store the URL in the base64 field for simplicity or rename it
+        }
+        return asset;
+      }));
+
+      // Upload Guidance Frames
+      const updatedGuidance = await Promise.all(guidanceFrames.map(async (gf) => {
+        if (gf.image && gf.image.base64.length > 1000) {
+          const url = await uploadImageToStorage(gf.image.base64, `projects/${projectName}/guidance/${gf.id}`);
+          return { ...gf, image: { ...gf.image, base64: url } };
+        }
+        return gf;
+      }));
+
+      // Upload Shots & Keyframes
+      let updatedShotBook = shotBook;
+      if (shotBook) {
+        updatedShotBook = await Promise.all(shotBook.map(async (shot) => {
+          let keyframeUrl = shot.keyframeImage;
+          if (shot.keyframeImage && shot.keyframeImage.length > 1000) {
+            keyframeUrl = await uploadImageToStorage(shot.keyframeImage, `projects/${projectName}/shots/${shot.id}/keyframe`);
+          }
+          
+          let historyUrls = shot.keyframeHistory;
+          if (shot.keyframeHistory) {
+            historyUrls = await Promise.all(shot.keyframeHistory.map(async (img, idx) => {
+              if (img.length > 1000) {
+                return await uploadImageToStorage(img, `projects/${projectName}/shots/${shot.id}/history_${idx}`);
+              }
+              return img;
+            }));
+          }
+
+          return { ...shot, keyframeImage: keyframeUrl, keyframeHistory: historyUrls };
+        }));
+      }
+
+      const stateToSave = {
+        projectName,
+        logEntries: logEntries.slice(-50), // Keep last 50 logs
+        apiCallSummary,
+        scenePlans,
+        lastPrompt,
+        updatedAt: new Date().toISOString(),
+        userId: user.uid,
+        assets: updatedAssets,
+        guidanceFrames: updatedGuidance
+      };
+
+      await setDoc(projectRef, stateToSave, { merge: true });
+      
+      if (updatedShotBook) {
+        const shotsCol = collection(projectRef, 'shots');
+        for (const shot of updatedShotBook) {
+          await setDoc(doc(shotsCol, shot.id), shot, { merge: true });
+        }
+      }
+
+      addLogEntry('Project synced to cloud storage.', LogType.SUCCESS);
+    } catch (e) {
+      console.error('Firebase save error:', e);
+      addLogEntry('Failed to sync to cloud.', LogType.ERROR);
+    }
+  };
+
+  // Auto-save to Firebase
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (appState === AppState.SUCCESS) saveProjectToFirebase();
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [shotBook, projectName, assets]);
+
+  const calculateTotalCost = () => {
+    const proInputCost = (apiCallSummary.proTokens.input / 1000000) * GEMINI_PRO_INPUT_COST_PER_MILLION_TOKENS;
+    const proOutputCost = (apiCallSummary.proTokens.output / 1000000) * GEMINI_PRO_OUTPUT_COST_PER_MILLION_TOKENS;
+    const flashInputCost = (apiCallSummary.flashTokens.input / 1000000) * GEMINI_FLASH_INPUT_COST_PER_MILLION_TOKENS;
+    const flashOutputCost = (apiCallSummary.flashTokens.output / 1000000) * GEMINI_FLASH_OUTPUT_COST_PER_MILLION_TOKENS;
+    const imageCost = apiCallSummary.image * IMAGEN_COST_PER_IMAGE;
+    return (proInputCost + proOutputCost + flashInputCost + flashOutputCost + imageCost).toFixed(4);
+  };
 
   // Load from Local Storage
   useEffect(() => {
@@ -337,7 +470,19 @@ const App: React.FC = () => {
 
   // GENERATION LOGIC
   const handleGenerate = async (scriptInput: string, createKeyframes: boolean) => {
-    if (!process.env.API_KEY && !showApiKeyDialog) { setShowApiKeyDialog(true); return; }
+    // Check for API key selection according to skill
+    if (window.aistudio) {
+        const hasKey = await window.aistudio.hasSelectedApiKey();
+        if (!hasKey) {
+            setShowApiKeyDialog(true);
+            return;
+        }
+    } else if (!process.env.API_KEY && !showApiKeyDialog) {
+        // Fallback for environments without window.aistudio
+        setShowApiKeyDialog(true);
+        return;
+    }
+
     stopGenerationRef.current = false;
     setIsProcessing(true);
     setAppState(AppState.LOADING);
@@ -351,11 +496,14 @@ const App: React.FC = () => {
       addLogEntry('Starting generation process...', LogType.INFO);
       const nameData = await generateProjectName(scriptInput);
       setProjectName(nameData.result);
+      if (nameData.thoughts) setCurrentThoughts(nameData.thoughts);
       updateApiSummary(nameData.tokens, 'flash');
       if (stopGenerationRef.current) throw new Error("Stopped.");
 
+      addLogEntry('Generating shot list...', LogType.INFO);
       const shotListData = await generateShotList(scriptInput);
       const rawShots = shotListData.result;
+      if (shotListData.thoughts) setCurrentThoughts(shotListData.thoughts);
       updateApiSummary(shotListData.tokens, 'pro');
       
       const initialShots: Shot[] = rawShots.map((s: any) => ({
@@ -363,8 +511,10 @@ const App: React.FC = () => {
       }));
       setShotBook(initialShots);
 
+      addLogEntry('Generating scene names...', LogType.INFO);
       const sceneNamesData = await generateSceneNames(rawShots, scriptInput);
       const sceneNameMap = sceneNamesData.result.names;
+      if (sceneNamesData.thoughts) setCurrentThoughts(sceneNamesData.thoughts);
       updateApiSummary(sceneNamesData.tokens, 'flash');
 
       const shotsWithScenes = initialShots.map(shot => {
@@ -382,91 +532,96 @@ const App: React.FC = () => {
           sceneGroups.get(sceneId)?.push(shot);
       });
 
-      const plans: ScenePlan[] = [];
-      for (const [sceneId, shots] of sceneGroups) {
-          if (stopGenerationRef.current) break;
-          await delay(API_CALL_DELAY_MS);
+      addLogEntry(`Planning ${sceneGroups.size} scenes in parallel...`, LogType.INFO);
+      const planPromises = Array.from(sceneGroups.entries()).map(async ([sceneId, shots]) => {
+          if (stopGenerationRef.current) return null;
+          addLogEntry(`Planning scene: ${sceneId}...`, LogType.STEP);
           const pitches = shots.map(s => `${s.id}: ${s.pitch}`).join('\n');
-          try {
-              const planData = await generateScenePlan(sceneId, pitches, scriptInput);
-              plans.push(planData.result);
-              updateApiSummary(planData.tokens, 'pro');
-          } catch (e) {}
-      }
+          const planData = await generateScenePlan(sceneId, pitches, scriptInput);
+          updateApiSummary(planData.tokens, 'pro');
+          if (planData.thoughts) setCurrentThoughts(planData.thoughts);
+          return planData.result;
+      });
+
+      const planResults = await Promise.all(planPromises);
+      const plans = planResults.filter((p): p is ScenePlan => p !== null);
       setScenePlans(plans);
 
       const finalShots = [...shotsWithScenes];
-      for (let i = 0; i < finalShots.length; i++) {
-        if (stopGenerationRef.current) break;
-        const shot = finalShots[i];
+      addLogEntry(`Generating production data for ${finalShots.length} shots in parallel...`, LogType.INFO);
+      
+      const shotPromises = finalShots.map(async (shot, i) => {
+        if (stopGenerationRef.current) return;
+        
+        addLogEntry(`Processing shot ${shot.id}...`, LogType.STEP);
+        
         const matchedAssetIds: string[] = [];
         assets.forEach(asset => { 
             if ((shot.pitch || '').toLowerCase().includes((asset.name || '').toLowerCase())) matchedAssetIds.push(asset.id); 
         });
-        finalShots[i].selectedAssetIds = matchedAssetIds;
-
-        setShotBook((prev) => prev ? prev.map((s, idx) => idx === i ? { ...s, status: ShotStatus.GENERATING_JSON } : s) : null);
+        
+        setShotBook((prev) => prev ? prev.map((s) => s.id === shot.id ? { ...s, status: ShotStatus.GENERATING_JSON, selectedAssetIds: matchedAssetIds } : s) : null);
+        
         const lastUnderscore = (shot.id || '').lastIndexOf('_');
         const sceneId = lastUnderscore !== -1 ? shot.id.substring(0, lastUnderscore) : shot.id;
         const relevantPlan = plans.find(p => p.scene_id === sceneId) || null;
 
-        await delay(API_CALL_DELAY_MS);
         try {
           const jsonData = await generateVeoJson(shot.pitch, shot.id, scriptInput, relevantPlan);
-          finalShots[i].veoJson = jsonData.result;
-          finalShots[i].status = ShotStatus.PENDING_KEYFRAME_PROMPT;
+          if (jsonData.thoughts) setCurrentThoughts(jsonData.thoughts);
           updateApiSummary(jsonData.tokens, 'pro');
-          setShotBook((prev) => prev ? prev.map((s, idx) => idx === i ? { ...s, veoJson: jsonData.result, status: ShotStatus.PENDING_KEYFRAME_PROMPT } : s) : null);
           
+          let updatedShot: Shot = {
+              ...shot,
+              veoJson: jsonData.result,
+              status: ShotStatus.PENDING_KEYFRAME_PROMPT,
+              selectedAssetIds: matchedAssetIds
+          };
+
           const charName = jsonData.result.veo_shot?.character?.name;
           if (charName && charName !== 'N/A') {
               const matchedChar = assets.find(a => a.type === 'character' && (a.name.toLowerCase().includes(charName.toLowerCase()) || charName.toLowerCase().includes(a.name.toLowerCase())));
-              if (matchedChar && !finalShots[i].selectedAssetIds.includes(matchedChar.id)) {
-                  finalShots[i].selectedAssetIds.push(matchedChar.id);
+              if (matchedChar && !updatedShot.selectedAssetIds.includes(matchedChar.id)) {
+                  updatedShot.selectedAssetIds.push(matchedChar.id);
               }
           }
+
+          setShotBook((prev) => prev ? prev.map((s) => s.id === shot.id ? updatedShot : s) : null);
+
+          if (createKeyframes && updatedShot.veoJson) {
+             addLogEntry(`Generating keyframe for ${shot.id}...`, LogType.STEP);
+             setShotBook((prev) => prev ? prev.map((s) => s.id === shot.id ? { ...s, status: ShotStatus.GENERATING_KEYFRAME_PROMPT } : s) : null);
+             
+             const promptData = await generateKeyframePromptText(updatedShot.veoJson!.veo_shot);
+             if (promptData.thoughts) setCurrentThoughts(promptData.thoughts);
+             updateApiSummary(promptData.tokens, 'pro');
+             
+             setShotBook((prev) => prev ? prev.map((s) => s.id === shot.id ? { ...s, keyframePromptText: promptData.result, status: ShotStatus.GENERATING_IMAGE } : s) : null);
+             
+             const ingredients: IngredientImage[] = [];
+             updatedShot.selectedAssetIds.forEach((id: string) => { const asset = assets.find(a => a.id === id); if (asset && asset.image) ingredients.push(asset.image); });
+             updatedShot.guidanceFrameIds.forEach((id: string) => { const frame = guidanceFrames.find(f => f.id === id); if (frame) ingredients.push(frame.image); });
+
+             const imageData = await generateKeyframeImage(promptData.result, ingredients, updatedShot.veoJson?.veo_shot?.scene?.aspect_ratio || "16:9");
+             updateApiSummary({input: 0, output: 0}, 'image');
+             
+             setShotBook((prev: ShotBook | null) => prev ? prev.map((s) => s.id === shot.id ? { ...s, keyframeImage: imageData.result, keyframeHistory: [imageData.result], status: ShotStatus.NEEDS_REVIEW } : s) : null);
+          } else {
+             setShotBook((prev: ShotBook | null) => prev ? prev.map((s) => s.id === shot.id ? { ...s, status: ShotStatus.NEEDS_KEYFRAME_GENERATION } : s) : null);
+          }
         } catch (e) {
-          finalShots[i].status = ShotStatus.GENERATION_FAILED;
-          setShotBook((prev) => prev ? prev.map((s, idx) => idx === i ? { ...s, status: ShotStatus.GENERATION_FAILED } : s) : null);
-          continue;
+          addLogEntry(`Failed to generate for ${shot.id}: ${(e as Error).message}`, LogType.ERROR);
+          setShotBook((prev) => prev ? prev.map((s) => s.id === shot.id ? { ...s, status: ShotStatus.GENERATION_FAILED } : s) : null);
         }
+      });
 
-        if (createKeyframes && finalShots[i].veoJson) {
-             setShotBook((prev) => prev ? prev.map((s, idx) => idx === i ? { ...s, status: ShotStatus.GENERATING_KEYFRAME_PROMPT } : s) : null);
-             await delay(API_CALL_DELAY_MS);
-             try {
-                 const promptData = await generateKeyframePromptText(finalShots[i].veoJson!.veo_shot);
-                 finalShots[i].keyframePromptText = promptData.result;
-                 updateApiSummary(promptData.tokens, 'pro');
-                 setShotBook((prev) => prev ? prev.map((s, idx) => idx === i ? { ...s, keyframePromptText: promptData.result, status: ShotStatus.GENERATING_IMAGE } : s) : null);
-                 await delay(API_CALL_DELAY_MS);
-                 
-                 const ingredients: IngredientImage[] = [];
-                 finalShots[i].selectedAssetIds.forEach((id: string) => { const asset = assets.find(a => a.id === id); if (asset && asset.image) ingredients.push(asset.image); });
-                 // Add guidance frames
-                 finalShots[i].guidanceFrameIds.forEach((id: string) => { const frame = guidanceFrames.find(f => f.id === id); if (frame) ingredients.push(frame.image); });
-
-                 const imageData = await generateKeyframeImage(finalShots[i].keyframePromptText!, ingredients, finalShots[i].veoJson?.veo_shot?.scene?.aspect_ratio || "16:9");
-                 finalShots[i].keyframeImage = imageData.result;
-                 finalShots[i].keyframeHistory = [imageData.result];
-                 finalShots[i].status = ShotStatus.NEEDS_REVIEW;
-                 updateApiSummary({input: 0, output: 0}, 'image');
-                 setShotBook((prev: ShotBook | null) => prev ? prev.map((s, idx) => idx === i ? { ...s, keyframeImage: imageData.result, keyframeHistory: [imageData.result], status: ShotStatus.NEEDS_REVIEW } : s) : null);
-             } catch (e) {
-                 finalShots[i].status = ShotStatus.GENERATION_FAILED;
-                 setShotBook((prev: ShotBook | null) => prev ? prev.map((s, idx) => idx === i ? { ...s, status: ShotStatus.GENERATION_FAILED, errorMessage: (e as Error).message } : s) : null);
-             }
-        } else {
-             finalShots[i].status = ShotStatus.NEEDS_KEYFRAME_GENERATION;
-             setShotBook((prev: ShotBook | null) => prev ? prev.map((s, idx) => idx === i ? { ...s, status: ShotStatus.NEEDS_KEYFRAME_GENERATION } : s) : null);
-        }
-      }
+      await Promise.all(shotPromises);
       addLogEntry('Generation completed!', LogType.SUCCESS);
       setAppState(AppState.SUCCESS);
     } catch (e) {
       setErrorMessage((e as Error).message || 'Error occurred.');
       setAppState(AppState.ERROR);
-      addLogEntry(`Error: ${(e as Error).message}`, LogType.ERROR);
+      addLogEntry(`Critical Error: ${(e as Error).message}`, LogType.ERROR);
     } finally { setIsProcessing(false); stopGenerationRef.current = false; }
   };
 
@@ -637,40 +792,56 @@ const App: React.FC = () => {
       if (!JSZip || !shotBook) return;
       const zip = new JSZip();
       
+      const fetchImageAsBase64 = async (url: string) => {
+          if (!url.startsWith('http')) return url;
+          const response = await fetch(url);
+          const blob = await response.blob();
+          return new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+              reader.readAsDataURL(blob);
+          });
+      };
+
       // Keyframes
       const kfFolder = zip.folder("keyframes");
       let kfCount = 0;
-      shotBook.forEach(shot => {
+      for (const shot of shotBook) {
           if (shot.keyframeHistory && shot.keyframeHistory.length > 0) {
-              shot.keyframeHistory.forEach((img, idx) => {
-                  kfFolder.file(`${shot.id}_v${idx + 1}.png`, img, { base64: true });
+              for (let idx = 0; idx < shot.keyframeHistory.length; idx++) {
+                  const img = shot.keyframeHistory[idx];
+                  const b64 = await fetchImageAsBase64(img);
+                  kfFolder.file(`${shot.id}_v${idx + 1}.png`, b64, { base64: true });
                   kfCount++;
-              });
+              }
           } else if (shot.keyframeImage) {
-              kfFolder.file(`${shot.id}.png`, shot.keyframeImage, { base64: true });
+              const b64 = await fetchImageAsBase64(shot.keyframeImage);
+              kfFolder.file(`${shot.id}.png`, b64, { base64: true });
               kfCount++;
           }
-      });
+      }
 
       // Assets
       const assetFolder = zip.folder("assets");
       let assetCount = 0;
-      assets.forEach(asset => {
+      for (const asset of assets) {
           if (asset.image) {
-              assetFolder.file(`${asset.name.replace(/\s+/g, '_')}_${asset.id}.png`, asset.image.base64, { base64: true });
+              const b64 = await fetchImageAsBase64(asset.image.base64);
+              assetFolder.file(`${asset.name.replace(/\s+/g, '_')}_${asset.id}.png`, b64, { base64: true });
               assetCount++;
           }
-      });
+      }
 
       // Guidance
       const guidanceFolder = zip.folder("guidance_frames");
       let guidanceCount = 0;
-      guidanceFrames.forEach(gf => {
+      for (const gf of guidanceFrames) {
           if (gf.image) {
-              guidanceFolder.file(`guidance_${gf.id}.png`, gf.image.base64, { base64: true });
+              const b64 = await fetchImageAsBase64(gf.image.base64);
+              guidanceFolder.file(`guidance_${gf.id}.png`, b64, { base64: true });
               guidanceCount++;
           }
-      });
+      }
 
       if (kfCount === 0 && assetCount === 0 && guidanceCount === 0) {
           addLogEntry("No images found to download.", LogType.INFO);
@@ -729,8 +900,50 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen font-sans text-gray-100 bg-[#121212]">
-      {appState === AppState.LOADING && <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm"><LoadingIndicator /><div className="absolute bottom-10"><button onClick={() => { stopGenerationRef.current = true; setIsProcessing(false); }} className="px-6 py-2 bg-red-800 hover:bg-red-700 text-white rounded-lg flex items-center gap-2"><StopCircleIcon className="w-5 h-5" /> Stop</button></div></div>}
-      {showApiKeyDialog && <ApiKeyDialog onContinue={() => setShowApiKeyDialog(false)} />}
+      {appState === AppState.LOADING && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-6 max-w-4xl w-full px-4">
+              <LoadingIndicator 
+                status={logEntries.length > 0 ? logEntries[logEntries.length - 1].message : undefined} 
+              />
+              
+              {currentThoughts && (
+                <div className="bg-gray-900/90 border border-indigo-500/30 rounded-xl p-6 w-full max-h-[40vh] overflow-y-auto shadow-2xl">
+                  <h3 className="text-indigo-400 font-semibold mb-3 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
+                    Model Reasoning
+                  </h3>
+                  <p className="text-gray-300 text-sm font-mono leading-relaxed whitespace-pre-wrap">
+                    {currentThoughts}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex items-center gap-4">
+                <div className="bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 text-sm">
+                  <span className="text-gray-400">Estimated Cost:</span>
+                  <span className="ml-2 text-green-400 font-mono">${calculateTotalCost()}</span>
+                </div>
+                <button 
+                  onClick={() => { stopGenerationRef.current = true; setIsProcessing(false); setAppState(AppState.IDLE); }} 
+                  className="px-6 py-2 bg-red-800 hover:bg-red-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <StopCircleIcon className="w-5 h-5" /> Stop
+                </button>
+              </div>
+            </div>
+          </div>
+      )}
+      {showApiKeyDialog && (
+          <ApiKeyDialog 
+            onContinue={async () => {
+                if (window.aistudio) {
+                    await window.aistudio.openSelectKey();
+                }
+                setShowApiKeyDialog(false);
+            }} 
+          />
+      )}
       <ConfirmDialog isOpen={showNewProjectDialog} title="Start New Project?" message="Clear script and shot list? Assets will be kept." onConfirm={() => { setShotBook(null); setProjectName(null); setLogEntries([]); setAppState(AppState.IDLE); setShowNewProjectDialog(false); }} onCancel={() => setShowNewProjectDialog(false)} />
       <ConfirmDialog 
           isOpen={!!showVeoApproval} 
@@ -759,7 +972,43 @@ const App: React.FC = () => {
             <ProjectSetupForm onGenerate={handleGenerate} isGenerating={false} onLoadProject={handleLoadProject} assets={assets} onAnalyzeScriptForAssets={handleAnalyzeScriptForAssets} isAnalyzingAssets={isAnalyzingAssets} onAddAsset={handleAddAsset} onRemoveAsset={handleRemoveAsset} onUpdateAssetImage={handleUpdateAssetImage} />
           </div>
         )}
-        {appState !== AppState.IDLE && shotBook && <ShotBookDisplay shotBook={shotBook} logEntries={logEntries} projectName={projectName} scenePlans={scenePlans} apiCallSummary={apiCallSummary} appVersion={PROJECT_VERSION} onNewProject={() => setShowNewProjectDialog(true)} onReset={() => setShowResetDialog(true)} onUpdateShot={handleUpdateShot} onGenerateSpecificKeyframe={handleGenerateSpecificKeyframe} onRefineShot={handleRefineShot} allAssets={assets} onToggleAssetForShot={handleToggleAssetForShot} onExportAllJsons={() => {}} onExportHtmlReport={() => {}} onSaveProject={handleSaveProject} onDownloadKeyframesZip={handleDownloadKeyframesZip} onExportPackage={handleExportPackage} onShowStorageInfo={() => setShowStorageInfoDialog(true)} isProcessing={isProcessing} onStopGeneration={() => { stopGenerationRef.current = true; setIsProcessing(false); }} onGenerateVideo={handleGenerateVeoVideo} onExtendVeoVideo={handleExtendVeoVideo} mcpConfig={mcpConfig} onSetMcpUrl={(url) => setMcpConfig(prev => ({ ...prev, url }))} onConnectMcp={handleConnectMcp} onSyncToResolve={handleSyncShotToMcp} guidanceFrames={guidanceFrames} onAddGuidanceFrame={handleAddGuidanceFrame} onRemoveGuidanceFrame={handleRemoveGuidanceFrame} onToggleGuidanceForShot={handleToggleGuidanceForShot} onGenerateAllKeyframes={handleGenerateAllKeyframes} />}
+        {appState !== AppState.IDLE && shotBook && (
+          <ShotBookDisplay 
+            shotBook={shotBook} 
+            logEntries={logEntries} 
+            projectName={projectName} 
+            scenePlans={scenePlans} 
+            apiCallSummary={apiCallSummary} 
+            appVersion={PROJECT_VERSION} 
+            onNewProject={() => setShowNewProjectDialog(true)} 
+            onReset={() => setShowResetDialog(true)} 
+            onUpdateShot={handleUpdateShot} 
+            onGenerateSpecificKeyframe={handleGenerateSpecificKeyframe} 
+            onRefineShot={handleRefineShot} 
+            allAssets={assets} 
+            onToggleAssetForShot={handleToggleAssetForShot} 
+            onExportAllJsons={() => {}} 
+            onExportHtmlReport={() => {}} 
+            onSaveProject={handleSaveProject} 
+            onLoadProject={handleLoadProject}
+            onDownloadKeyframesZip={handleDownloadKeyframesZip} 
+            onExportPackage={handleExportPackage} 
+            onShowStorageInfo={() => setShowStorageInfoDialog(true)} 
+            isProcessing={isProcessing} 
+            onStopGeneration={() => { stopGenerationRef.current = true; setIsProcessing(false); }} 
+            onGenerateVideo={handleGenerateVeoVideo} 
+            onExtendVeoVideo={handleExtendVeoVideo} 
+            mcpConfig={mcpConfig} 
+            onSetMcpUrl={(url) => setMcpConfig(prev => ({ ...prev, url }))} 
+            onConnectMcp={handleConnectMcp} 
+            onSyncToResolve={handleSyncShotToMcp} 
+            guidanceFrames={guidanceFrames} 
+            onAddGuidanceFrame={handleAddGuidanceFrame} 
+            onRemoveGuidanceFrame={handleRemoveGuidanceFrame} 
+            onToggleGuidanceForShot={handleToggleGuidanceForShot} 
+            onGenerateAllKeyframes={handleGenerateAllKeyframes} 
+          />
+        )}
         <footer className="mt-auto py-6 text-center text-gray-600 text-sm"><p>Powered by Google Gemini & Veo 3.1 • DaVinci Resolve Integration via MCP</p></footer>
       </main>
     </div>
