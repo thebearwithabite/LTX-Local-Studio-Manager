@@ -62,6 +62,3 @@ VITE_FIREBASE_DATABASE_ID=(default)
     *   `/Production`: Shot list and individual VEO JSON prompts.
 *   **Visual Reports:** Standalone HTML storyboards with cost breakdowns.
 
-## 🛠 Maintenance & Troubleshooting
-
-*   **Git History Fix:** If you need to purge large files or secrets from your repository history, see [GIT_HISTORY_FIX.md](./GIT_HISTORY_FIX.md).
