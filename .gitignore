@@ -1,2 +1,7 @@
 migrated_prompt_history
 GIT_*
+
+# Local environment files — never commit secrets
+.env
+.env.local
+.env.*.local
