@@ -1,0 +1,240 @@
+{
+  "generated": [
+    {
+      "name": "kitchen_wide_morning",
+      "model": "flux",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "kitchen_wide_morning",
+      "model": "seedream",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "kitchen_wide_morning",
+      "model": "lucid",
+      "gen_id": "0eb00555-209a-4c2f-b8a2-fd1ab00df8ad",
+      "paths": [
+        "emergence_keyframes/kitchen_wide_morning/kitchen_wide_morning__lucid_1.jpg",
+        "emergence_keyframes/kitchen_wide_morning/kitchen_wide_morning__lucid_2.jpg",
+        "emergence_keyframes/kitchen_wide_morning/kitchen_wide_morning__lucid_3.jpg",
+        "emergence_keyframes/kitchen_wide_morning/kitchen_wide_morning__lucid_4.jpg"
+      ]
+    },
+    {
+      "name": "kitchen_island_closeup",
+      "model": "lucid",
+      "gen_id": "8d5db8c3-0b1f-4841-84ce-5adbcba96cab",
+      "paths": [
+        "emergence_keyframes/kitchen_island_closeup/kitchen_island_closeup__lucid_1.jpg",
+        "emergence_keyframes/kitchen_island_closeup/kitchen_island_closeup__lucid_2.jpg",
+        "emergence_keyframes/kitchen_island_closeup/kitchen_island_closeup__lucid_3.jpg",
+        "emergence_keyframes/kitchen_island_closeup/kitchen_island_closeup__lucid_4.jpg"
+      ]
+    },
+    {
+      "name": "kitchen_island_closeup",
+      "model": "seedream",
+      "error": "'sdGenerationJob'"
+    },
+    {
+      "name": "kitchen_window_anomaly",
+      "model": "seedream",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "kitchen_window_anomaly",
+      "model": "flux",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "kitchen_den_transition",
+      "model": "flux",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "kitchen_den_transition",
+      "model": "lucid",
+      "gen_id": "11293d4c-c02c-4e2e-b4ec-a516b0c61419",
+      "paths": [
+        "emergence_keyframes/kitchen_den_transition/kitchen_den_transition__lucid_1.jpg",
+        "emergence_keyframes/kitchen_den_transition/kitchen_den_transition__lucid_2.jpg",
+        "emergence_keyframes/kitchen_den_transition/kitchen_den_transition__lucid_3.jpg",
+        "emergence_keyframes/kitchen_den_transition/kitchen_den_transition__lucid_4.jpg"
+      ]
+    },
+    {
+      "name": "kitchen_front_door",
+      "model": "flux",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "kitchen_front_door",
+      "model": "lucid",
+      "gen_id": "f01228b3-c749-4dd9-84b8-28fbf78c250e",
+      "paths": [
+        "emergence_keyframes/kitchen_front_door/kitchen_front_door__lucid_1.jpg",
+        "emergence_keyframes/kitchen_front_door/kitchen_front_door__lucid_2.jpg",
+        "emergence_keyframes/kitchen_front_door/kitchen_front_door__lucid_3.jpg",
+        "emergence_keyframes/kitchen_front_door/kitchen_front_door__lucid_4.jpg"
+      ]
+    },
+    {
+      "name": "kitchen_session_drain",
+      "model": "seedream",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "kitchen_session_drain",
+      "model": "lucid",
+      "gen_id": "50c287a0-b11e-4979-96eb-70d4b9264c7a",
+      "paths": [
+        "emergence_keyframes/kitchen_session_drain/kitchen_session_drain__lucid_1.jpg",
+        "emergence_keyframes/kitchen_session_drain/kitchen_session_drain__lucid_2.jpg",
+        "emergence_keyframes/kitchen_session_drain/kitchen_session_drain__lucid_3.jpg",
+        "emergence_keyframes/kitchen_session_drain/kitchen_session_drain__lucid_4.jpg"
+      ]
+    },
+    {
+      "name": "ryan_at_table",
+      "model": "lucid",
+      "gen_id": "d9eb116c-dde7-49ea-8dc1-084f03812b99",
+      "paths": [
+        "emergence_keyframes/ryan_at_table/ryan_at_table__lucid_1.jpg",
+        "emergence_keyframes/ryan_at_table/ryan_at_table__lucid_2.jpg",
+        "emergence_keyframes/ryan_at_table/ryan_at_table__lucid_3.jpg",
+        "emergence_keyframes/ryan_at_table/ryan_at_table__lucid_4.jpg"
+      ]
+    },
+    {
+      "name": "ryan_at_table",
+      "model": "flux",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "lena_doorway",
+      "model": "lucid",
+      "gen_id": "ca1fd3a6-7cd3-470b-b12c-c8ea3142e9b8",
+      "paths": [
+        "emergence_keyframes/lena_doorway/lena_doorway__lucid_1.jpg",
+        "emergence_keyframes/lena_doorway/lena_doorway__lucid_2.jpg",
+        "emergence_keyframes/lena_doorway/lena_doorway__lucid_3.jpg",
+        "emergence_keyframes/lena_doorway/lena_doorway__lucid_4.jpg"
+      ]
+    },
+    {
+      "name": "lena_doorway",
+      "model": "flux",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "lena_doorway",
+      "model": "seedream",
+      "error": "'sdGenerationJob'"
+    },
+    {
+      "name": "lena_seated",
+      "model": "lucid",
+      "gen_id": "1d4e37f5-bc29-49da-ab2b-5a542a6fba2b",
+      "paths": [
+        "emergence_keyframes/lena_seated/lena_seated__lucid_1.jpg",
+        "emergence_keyframes/lena_seated/lena_seated__lucid_2.jpg",
+        "emergence_keyframes/lena_seated/lena_seated__lucid_3.jpg",
+        "emergence_keyframes/lena_seated/lena_seated__lucid_4.jpg"
+      ]
+    },
+    {
+      "name": "lena_seated",
+      "model": "seedream",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "dan_morning",
+      "model": "lucid",
+      "gen_id": "9a3e569e-2b24-4559-883d-9fc0e841123f",
+      "paths": [
+        "emergence_keyframes/dan_morning/dan_morning__lucid_1.jpg",
+        "emergence_keyframes/dan_morning/dan_morning__lucid_2.jpg",
+        "emergence_keyframes/dan_morning/dan_morning__lucid_3.jpg",
+        "emergence_keyframes/dan_morning/dan_morning__lucid_4.jpg"
+      ]
+    },
+    {
+      "name": "dan_morning",
+      "model": "flux",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "ryan_lena_two_shot",
+      "model": "flux",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "ryan_lena_two_shot",
+      "model": "lucid",
+      "gen_id": "b6cd98ed-d8a3-4c27-b75b-3392fe0cd962",
+      "paths": [
+        "emergence_keyframes/ryan_lena_two_shot/ryan_lena_two_shot__lucid_1.jpg",
+        "emergence_keyframes/ryan_lena_two_shot/ryan_lena_two_shot__lucid_2.jpg",
+        "emergence_keyframes/ryan_lena_two_shot/ryan_lena_two_shot__lucid_3.jpg",
+        "emergence_keyframes/ryan_lena_two_shot/ryan_lena_two_shot__lucid_4.jpg"
+      ]
+    },
+    {
+      "name": "city_breath_predawn",
+      "model": "flux",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "city_breath_predawn",
+      "model": "seedream",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "city_breath_bus",
+      "model": "flux",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "city_breath_bus",
+      "model": "seedream",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "city_breath_dusk",
+      "model": "flux",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "city_breath_dusk",
+      "model": "seedream",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "fence_mythology",
+      "model": "seedream",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "fence_mythology",
+      "model": "lucid",
+      "gen_id": "6a358dee-f69c-40d5-8eff-ef79b36e5d80",
+      "paths": [
+        "emergence_keyframes/fence_mythology/fence_mythology__lucid_1.jpg",
+        "emergence_keyframes/fence_mythology/fence_mythology__lucid_2.jpg",
+        "emergence_keyframes/fence_mythology/fence_mythology__lucid_3.jpg",
+        "emergence_keyframes/fence_mythology/fence_mythology__lucid_4.jpg"
+      ]
+    },
+    {
+      "name": "lena_fog_walk",
+      "model": "flux",
+      "error": "list indices must be integers or slices, not str"
+    },
+    {
+      "name": "lena_fog_walk",
+      "model": "seedream",
+      "error": "list indices must be integers or slices, not str"
+    }
+  ]
+}

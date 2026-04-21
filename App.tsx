@@ -25,6 +25,8 @@ import {
   generateScenePlan,
   generateShotList,
   generateVeoJson,
+  generateAgnosticShotJson,
+  selectWinningKeyframe,
   extractAssetsFromScript,
   refineVeoJson,
   executeMcpAction,
@@ -654,8 +656,8 @@ const App: React.FC = () => {
       updateApiSummary(nameData.tokens, 'flash');
       if (stopGenerationRef.current) throw new Error("Stopped.");
 
-      addLogEntry('Generating shot list...', LogType.INFO);
-      const shotListData = await generateShotList(scriptInput);
+      addLogEntry('Generating shot list with visual inference...', LogType.INFO);
+      const shotListData = await generateShotList(scriptInput, assets);
       const rawShots = shotListData.result;
       if (shotListData.thoughts) setCurrentThoughts(shotListData.thoughts);
       updateApiSummary(shotListData.tokens, 'pro');
@@ -722,7 +724,7 @@ const App: React.FC = () => {
         const relevantPlan = plans.find(p => p.scene_id === sceneId) || null;
 
         try {
-          const jsonData = await generateVeoJson(shot.pitch, shot.id, scriptInput, relevantPlan);
+          const jsonData = await generateAgnosticShotJson(shot.pitch, shot.id, scriptInput, relevantPlan, assets);
           if (jsonData.thoughts) setCurrentThoughts(jsonData.thoughts);
           updateApiSummary(jsonData.tokens, 'pro');
           

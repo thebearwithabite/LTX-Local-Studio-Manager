@@ -1,0 +1,90 @@
+{
+  "source": {
+    "title": "How To Use LTX-2.3 in ComfyUI | Best FREE AI Video Model?",
+    "channel": "MDMZ",
+    "url": "https://www.youtube.com/watch?v=W-PIgkRWJOc",
+    "date_watched": "2026-03-28",
+    "relevance_tags": ["prompt_engineering", "cinematography", "audio_design", "model_specific", "workflow"]
+  },
+  "techniques": [
+    {
+      "name": "Audio-Visual Synchronized Prompting",
+      "category": "prompt_craft",
+      "description": "Incorporating bracketed audio directives directly within the scene description to coordinate motion with sound.",
+      "when_to_use": "Use when the visual action, like speech or an environmental event, requires precise auditory timing within the same generation pass.",
+      "example_prompt": "A medium handheld shot frames a man standing on a busy city street in daylight... He speaks clearly with natural lip movement, saying exactly: 'What's impressive about LTX-2.3 is the improved video quality and built-in audio generation.' Ambient city noise remains subtle beneath his voice.",
+      "anti_pattern": "Leaving audio to the model's 'imagination,' which leads to silent videos or mismatched background noise.",
+      "model_specific": "LTX-2.3"
+    },
+    {
+      "name": "Image-to-Video Anchor Workflow",
+      "category": "continuity",
+      "description": "Using a high-quality, pre-composed reference image as the starting point for video generation to lock in character features and environment.",
+      "when_to_use": "Essential when generating scenes with specific text, like product labels or brand logos, to prevent the 'morphing' effect typical of pure text-to-video.",
+      "example_prompt": "N/A (Uses 'Load Image' node)",
+      "anti_pattern": "Using text-to-video for marketing content where brand consistency is non-negotiable.",
+      "model_specific": "LTX-2.3"
+    },
+    {
+      "name": "Voice-Swap Post-Processing",
+      "category": "audio",
+      "description": "Replacing the randomly generated AI voice with a consistent voice preset or user-provided audio file.",
+      "when_to_use": "Apply across multiple clips featuring the same character to maintain narrative immersion and vocal continuity.",
+      "example_prompt": "N/A (Tool-based: Hicksfield)",
+      "anti_pattern": "Allowing the AI to generate a different voice for each shot of the same character in a short film.",
+      "model_specific": "Universal"
+    }
+  ],
+  "prompt_examples": [
+    {
+      "prompt_text": "A close-up handheld shot shows a beautiful colorful parrot sitting on a porch perch. Behind the parrot, the background is softly blurred. It tilts its head curiously towards the camera, ruffling its feathers slightly. Sound: parrot squawks, light wind, and subtle porch creaks.",
+      "context": "Demonstrating LTX-2.3's capability for intricate animal textures and environmental sound layering.",
+      "result_quality": "Good",
+      "improvement_notes": "Noted that while motion was fluid, adding the specific sound descriptions significantly enhanced the realism of the ruffling feathers."
+    }
+  ],
+  "principles": [
+    {
+      "principle": "Foundation-Based Generation",
+      "reasoning": "Giving a model an image foundation (I2V) provides a geometric 'safe zone' that prevents the drifting common in text-only diffusion.",
+      "qa_pair": {
+        "question": "How can I stop my character's face from changing between every single shot?",
+        "answer": "Generate a definitive reference image of your character first, then use that image in the Image-to-Video node. This 'anchors' the character's facial structure and proportions across different clips."
+      }
+    }
+  ],
+  "workflow_steps": [
+    {
+      "step": 1,
+      "action": "Select FP8 vs Main Checkpoint",
+      "tool_or_node": "Checkpoint Loader",
+      "parameter_notes": "Use FP8 for 24GB VRAM cards to enable 1080p generation; use Main for 32GB+ VRAM cards for maximum fidelity."
+    },
+    {
+      "step": 2,
+      "action": "Configure Video Length",
+      "tool_or_node": "Sampler Settings",
+      "parameter_notes": "Set to 121 frames for a standard 5-second cinematic clip at 24fps."
+    },
+    {
+      "step": 3,
+      "action": "Vocal Identity Replacement",
+      "tool_or_node": "Hicksfield Audio Hub",
+      "parameter_notes": "Upload generated LTX clip and select 'Change Voice' to apply a consistent character preset."
+    }
+  ],
+  "training_pairs": [
+    {
+      "instruction": "I'm directing a commercial where a bottle of soda is being poured. How do I make sure the logo on the bottle doesn't turn into gibberish?",
+      "response": "For branded content, you should use the LTX-2.3 Image-to-Video workflow. First, create a high-resolution still of the bottle with the logo perfectly rendered. Use this as your 'First Frame' reference. This provides the model with a static anchor, which is much more effective at preserving text legibility than relying on a text prompt alone."
+    },
+    {
+      "instruction": "I want my character to deliver a specific line of dialogue. What's the best way to handle the audio?",
+      "response": "In LTX-2.3, you should include the dialogue explicitly in your prompt using brackets, like [dialogue: 'Your line here']. However, since the AI generates a random voice, you'll need to follow up by running the output through a voice replacement tool like Hicksfield to ensure the character's voice matches your project's needs."
+    },
+    {
+      "instruction": "My GPU has 24GB of VRAM. Can I generate a 1080p clip that's 10 seconds long?",
+      "response": "Yes, but you should stick to the FP8 version of the model. For a 10-second clip at 24fps, set your frame count to 241. The FP8 quantization allows you to hit these higher resolutions and durations on a 24GB card without triggering out-of-memory errors."
+    }
+  ]
+}

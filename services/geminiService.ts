@@ -13,11 +13,11 @@ import {
   ProjectAsset,
   ScenePlan,
   Shot,
-  ShotStatus,
   VeoShot,
   VeoShotWrapper,
   McpTool,
 } from '../types';
+import { generateKeyframeAgnostic, getGenerationTaskDetails } from './leonardoService';
 
 const getAiClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -80,7 +80,8 @@ YOUR TASK (AMENDED):
 6.  The 'shot_id' in the nested 'veo_shot' object MUST EXACTLY MATCH the provided shot_id.
 7.  If unit_type is 'extend', you MUST include a 'directorNotes' field containing a natural language summary of the segment's narrative intent, style/tone guidance, rhythm, audio emphasis, and continuity strategy. This field should be absent for 'shot' unit_type.
 8.  IMPORTANT: Your response MUST be valid JSON. Do NOT repeat the script or scene context in your output. Be concise.
-9.  Your final output MUST be only the single, valid JSON object matching the WRAPPER_SCHEMA. Do not output any other text, explanation, or markdown formatting.
+9.  VISUAL INFERENCE (CRITICAL): You will be provided with images of characters, locations, and styles. You MUST use "Visual Inference" to inform the technical specs. If a reference image shows a specific lighting, mood, or texture, you MUST automatically prioritize those details in the technical spec without being explicitly told in the text script.
+10. Your final output MUST be only the single, valid JSON object matching the WRAPPER_SCHEMA. Do not output any other text, explanation, or markdown formatting.
 
 --- WRAPPER_SCHEMA ---
 {
@@ -423,11 +424,27 @@ export const extractAssetsFromScript = async (
 
 export const generateShotList = async (
   script: string,
+  assets: ProjectAsset[] = []
 ): Promise<GenerateResult<{id: string; pitch: string}[]>> => {
   const ai = getAiClient();
+  const contentParts: any[] = [{ text: script }];
+
+  // Add visuals from Asset Library for "Visual Inference" in shot listing
+  assets.forEach(asset => {
+    if (asset.image) {
+      contentParts.push({
+        inlineData: {
+          data: asset.image.base64,
+          mimeType: asset.image.mimeType
+        }
+      });
+      contentParts.push({ text: `Visual Reference [${asset.type}]: ${asset.name}` });
+    }
+  });
+
   const response = await ai.models.generateContent({
     model: 'gemini-3.1-pro-preview',
-    contents: script,
+    contents: { parts: contentParts },
     config: {
       systemInstruction: SYSTEM_PROMPT_SHOTLIST,
       responseMimeType: 'application/json',
@@ -612,6 +629,106 @@ export const generateVeoJson = async (
   };
 };
 
+/**
+ * Step 1 (Agnostic): Generates structured JSON for a shot with Multi-Modal awareness.
+ */
+export const generateAgnosticShotJson = async (
+  pitch: string,
+  id: string,
+  fullScript: string,
+  scenePlan: ScenePlan | null,
+  assets: ProjectAsset[] = []
+): Promise<GenerateResult<VeoShotWrapper>> => {
+  const ai = getAiClient();
+  const contentParts: any[] = [
+    { text: `SHOT ID: "${id}"\nPITCH: "${pitch}"\nSCENE PLAN:\n${JSON.stringify(scenePlan || {})}\nSCRIPT:\n${fullScript}` }
+  ];
+
+  // Add visuals from Asset Library
+  assets.forEach(asset => {
+    if (asset.image) {
+      contentParts.push({
+        inlineData: {
+          data: asset.image.base64,
+          mimeType: asset.image.mimeType
+        }
+      });
+      contentParts.push({ text: `Asset Reference [${asset.type}]: ${asset.name} - ${asset.description}` });
+    }
+  });
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3.1-pro-preview',
+    contents: { parts: contentParts },
+    config: {
+      systemInstruction: SYSTEM_PROMPT_SINGLE_SHOT_JSON,
+      responseMimeType: 'application/json',
+      responseSchema: VEO_SHOT_WRAPPER_SCHEMA,
+      maxOutputTokens: 8192,
+      temperature: 0.2,
+    },
+  });
+
+  const cleanedText = cleanJsonOutput(response.text || '');
+  let result;
+  try {
+    result = JSON.parse(cleanedText);
+  } catch (e) {
+    result = JSON.parse(attemptJsonRepair(cleanedText));
+  }
+
+  return {
+    result: result as VeoShotWrapper,
+    tokens: {
+      input: response.usageMetadata?.promptTokenCount || 0,
+      output: response.usageMetadata?.candidatesTokenCount || 0,
+    }
+  };
+};
+
+/**
+ * Step 3: The "Eye" Selection Agent.
+ * Reviews 4 renders and selects the one most faithful to the reference image.
+ */
+export const selectWinningKeyframe = async (
+  renders: { base64: string; mimeType: string }[],
+  referenceImage: { base64: string; mimeType: string },
+  characterName: string = "the character"
+): Promise<GenerateResult<number>> => {
+  const ai = getAiClient();
+  const contentParts: any[] = [
+    { text: `You are the Director. Review these 4 renders of ${characterName}. Which one is most faithful to the Character Reference Image provided? Look for specific facial structure and hair texture. Select the winner by ID (0, 1, 2, or 3). Output ONLY the winning ID.` },
+    { inlineData: { data: referenceImage.base64, mimeType: referenceImage.mimeType } },
+    { text: "Character Reference Image" }
+  ];
+
+  renders.forEach((render, index) => {
+    contentParts.push({ inlineData: { data: render.base64, mimeType: render.mimeType } });
+    contentParts.push({ text: `Render candidate ${index}` });
+  });
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3.1-pro-preview',
+    contents: { parts: contentParts },
+  });
+
+  const winnerId = (response.text || '').trim().match(/\d+/)?.[0];
+  const winnerIndex = winnerId ? parseInt(winnerId) : 0;
+  
+  if (isNaN(winnerIndex) || winnerIndex < 0 || winnerIndex >= renders.length) {
+    console.warn("Director failed to select a valid ID, defaulting to index 0");
+    return { result: 0, tokens: { input: 0, output: 0 } };
+  }
+
+  return {
+    result: winnerIndex,
+    tokens: {
+      input: response.usageMetadata?.promptTokenCount || 0,
+      output: response.usageMetadata?.candidatesTokenCount || 0,
+    }
+  };
+};
+
 export const refineVeoJson = async (currentJson: VeoShotWrapper, feedback: string) => {
     const ai = getAiClient();
     const response = await ai.models.generateContent({
@@ -645,25 +762,55 @@ export const generateKeyframeImage = async (
   ingredientImages: IngredientImage[],
   aspectRatio: string = '16:9'
 ): Promise<GenerateResult<string>> => {
-  const ai = getAiClient();
-  const contentParts: any[] = [{text: promptText}];
-  ingredientImages.forEach((image) => {
-      contentParts.push({ inlineData: { data: image.base64, mimeType: image.mimeType } });
-  });
+  // 1. THE GAFFER: Call Leonardo Agnostic Engine to generate 4 candidates
+  const genResponse = await generateKeyframeAgnostic(promptText, 4, aspectRatio);
+  const generationId = genResponse.sdGenerationJob?.generationId;
 
-  const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-image-preview',
-      contents: {parts: contentParts},
-      config: {
-          imageConfig: {
-              imageSize: '2K',
-              aspectRatio: (aspectRatio || '16:9') as any
-          }
-      },
-  });
+  if (!generationId) {
+    throw new Error("Failed to start Leonardo generation job.");
+  }
+
+  // 2. POLLING: Wait for the 4 renders to complete
+  let urls: string[] = [];
+  const maxRetries = 30;
+  for (let i = 0; i < maxRetries; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    const status = await getGenerationTaskDetails(generationId);
+    const gen = status.generations_by_pk;
+    
+    if (gen.status === 'COMPLETE') {
+      urls = gen.generated_images.map((img: any) => img.url);
+      break;
+    } else if (gen.status === 'FAILED') {
+      throw new Error("Leonardo generation failed.");
+    }
+  }
+
+  if (urls.length < 1) {
+    throw new Error("Leonardo generation timed out.");
+  }
+
+  // 3. THE EYE: If we have multiple candidates, let Gemini cast the winner
+  if (urls.length > 1 && ingredientImages.length > 0) {
+    // Fetch candidates and convert to base64 for Gemini Vision
+    const candidateData = await Promise.all(urls.map(async (url) => {
+      const resp = await fetch(url);
+      const blob = await resp.blob();
+      const arrayBuffer = await blob.arrayBuffer();
+      const base64 = btoa(new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ''));
+      return { base64, mimeType: blob.type };
+    }));
+
+    const selection = await selectWinningKeyframe(candidateData, ingredientImages[0]);
+    const winningUrl = urls[selection.result] || urls[0];
+    return {
+      result: winningUrl,
+      tokens: selection.tokens
+    };
+  }
 
   return {
-      result: getImageBase64(response),
-      tokens: { input: 0, output: 0 }, 
+    result: urls[0],
+    tokens: { input: 0, output: 0 }, 
   };
 };

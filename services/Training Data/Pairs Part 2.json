@@ -1,0 +1,295 @@
+[
+  {
+    "source": {
+      "title": "Leonardo AI Tutorial: From Concept to Cinematic Video",
+      "channel": "Kevin Stratvert",
+      "url": "https://www.youtube.com/watch?v=kY67Z3wO_qU",
+      "date_watched": "2024-05-22",
+      "relevance_tags": [
+        "Leonardo AI",
+        "AI Video Generation",
+        "Motion Tool",
+        "Cinematic Filmmaking",
+        "Image-to-Video"
+      ]
+    },
+    "quality_assessment": {
+      "score": 5,
+      "reasoning": "The tutorial provides a clear, professional workflow for high-fidelity video production. It bridges the gap between text prompting and professional output by using the Image-to-Video 'anchor' technique and the Universal Upscaler.",
+      "coverage_check": [
+        "prompt_craft",
+        "camera_work",
+        "workflow",
+        "model_config"
+      ]
+    },
+    "techniques": [
+      {
+        "name": "Image-to-Video Anchoring",
+        "category": "workflow",
+        "description": "Generating a high-quality static image first to serve as the definitive frame for video generation.",
+        "when_to_use": "WHEN you need specific character consistency and environmental detail that direct text-to-video models often hallucinate.",
+        "example_prompt": "A close-up cinematic portrait of a cybernetic warrior, neon lighting, shallow depth of field, 8k resolution.",
+        "anti_pattern": "Starting with text-to-video for complex scenes, which often leads to 'blobby' shapes and lost identity.",
+        "model_specific": "Leonardo Motion Tool"
+      },
+      {
+        "name": "Motion Strength Calibration",
+        "category": "model_config",
+        "description": "Adjusting the intensity of pixels changing between frames via the Motion Strength slider (Scale 1-10).",
+        "when_to_use": "Use low values (3-5) for subtle atmospheric movement; use high values (7-10) for high-action sequences like explosions or fast running.",
+        "example_prompt": "Set Motion Strength to 4 for a breathing landscape or flowing hair.",
+        "anti_pattern": "Maxing out motion strength (10) on a portrait, which typically results in facial feature morphing or 'melting'.",
+        "model_specific": "Leonardo.ai Motion Tool"
+      },
+      {
+        "name": "Universal Upscaling",
+        "category": "workflow",
+        "description": "A post-production step that uses a secondary AI model to enhance resolution, textures, and clarity of the generated video.",
+        "when_to_use": "WHEN the initial output looks slightly blurry or contains minor AI 'fuzz' that needs smoothing for a 4K display.",
+        "example_prompt": "N/A (Tool selection)",
+        "anti_pattern": "Relying purely on raw generation for the final deliverable without a refinement pass.",
+        "model_specific": "Leonardo Universal Upscaler"
+      },
+      {
+        "name": "Camera Control Overlays",
+        "category": "camera_work",
+        "description": "Using specific directional sliders (Zoom, Pan, Tilt) to force the AI to simulate physical camera hardware movement.",
+        "when_to_use": "WHEN you want to guide the viewer's attention to a specific focal point using a zoom-in.",
+        "example_prompt": "Set Camera Zoom to 0.5 for a slow push-in effect.",
+        "anti_pattern": "Leaving camera controls on default when a specific cinematic 'reveal' (like a pan-up) is required by the script.",
+        "model_specific": "Leonardo AI Video Controls"
+      },
+      {
+        "name": "Negative Prompting for Motion",
+        "category": "prompt_craft",
+        "description": "Specifying unwanted visual elements to ensure the AI doesn't add them during the frame-interpolation process.",
+        "when_to_use": "WHEN the AI adds unwanted limbs, morphing objects, or text-like artifacts during movement.",
+        "example_prompt": "Negative: extra limbs, morphing, floating eyes, text, watermark.",
+        "anti_pattern": "Failing to use negative prompts, resulting in 'ghosting' effects during high-motion shots.",
+        "model_specific": "Universal Principle"
+      }
+    ],
+    "prompt_examples": [
+      {
+        "prompt_text": "Cinematic wide shot of a medieval castle on a snowy cliff, moonlight reflecting on the ocean, hyper-realistic, 8k, Unreal Engine 5 style.",
+        "context": "Initial image generation intended to be the base for a 4-second establishing shot.",
+        "result_quality": "High detail, stable composition.",
+        "improvement_notes": "Add 'fog' or 'particle effects' to the prompt to give the Motion Tool more data to animate subtly."
+      },
+      {
+        "prompt_text": "Close-up of an old man's eyes, extreme detail, wrinkles and pores visible, dramatic rim lighting, moody atmosphere.",
+        "context": "Image for a video focusing on subtle micro-expressions.",
+        "result_quality": "Great texture, but prone to morphing if motion is too high.",
+        "improvement_notes": "Keep Motion Strength below 3 to prevent the eyes from changing shape or the man's features from drifting."
+      }
+    ],
+    "principles": [
+      {
+        "principle": "The Anchor Rule",
+        "reasoning": "AI video is inherently unstable. By establishing a fixed 'hero image' first, you provide the model with a grounded reference point for every subsequent frame.",
+        "qa_pair": {
+          "question": "Why generate an image first instead of just typing a video prompt?",
+          "answer": "Image-to-video allows for precise control over the starting frame's composition, lighting, and details, ensuring the AI has a high-quality 'map' to animate."
+        }
+      },
+      {
+        "principle": "The Artifact-Energy Balance",
+        "reasoning": "In current AI models, more motion equals more potential for errors. Quality filmmaking requires finding the minimum motion strength necessary to convey the intended action.",
+        "qa_pair": {
+          "question": "How do you fix a video where the character's face is melting during a turn?",
+          "answer": "Reduce the Motion Strength slider and check if there are conflicting directional camera controls (e.g., zooming while the character moves forward)."
+        }
+      }
+    ],
+    "workflow_steps": [
+      {
+        "step": 1,
+        "action": "Concept and Image Generation",
+        "tool_or_node": "Leonardo Image Generation",
+        "parameter_notes": "Use 'Leonardo Vision XL' model for realistic textures. Generate in 16:9 for cinematic output."
+      },
+      {
+        "step": 2,
+        "action": "Select and Refine Base Image",
+        "tool_or_node": "Image Canvas",
+        "parameter_notes": "Pick the most stable generation. Use the 'Alchemy' toggle for better color depth."
+      },
+      {
+        "step": 3,
+        "action": "Initiate Motion Tool",
+        "tool_or_node": "Leonardo Motion Tool",
+        "parameter_notes": "Upload the base image. Set Motion Strength between 4 and 6 for most standard scenes."
+      },
+      {
+        "step": 4,
+        "action": "Set Camera Path",
+        "tool_or_node": "Camera Controls",
+        "parameter_notes": "Apply subtle Zoom (0.2 - 0.4) to add professional 'push-in' energy."
+      },
+      {
+        "step": 5,
+        "action": "Final Enhancement",
+        "tool_or_node": "Universal Upscaler",
+        "parameter_notes": "Select 'Cinematic' or '2x' to sharpen edges and fix compression artifacts from the generation phase."
+      }
+    ],
+    "training_pairs": [
+      {
+        "instruction": "How can I ensure my AI-generated video doesn't look like a blurry mess at higher resolutions?",
+        "response": "Use a two-step workflow: first, generate your video at standard resolution using the Motion Tool, then run the final clip through the Universal Upscaler. This process recreates detail and sharpens the image without changing the motion logic."
+      },
+      {
+        "instruction": "I want a shot of a busy city street, but the people's faces keep turning into monsters when they move. What should I change?",
+        "response": "This is a sign of high Motion Strength causing artifacts. Lower your Motion Strength to around 3 or 4. Also, use an Image-to-Video workflow with a very clear, sharp base image so the AI has a better reference for human anatomy."
+      },
+      {
+        "instruction": "When should I use a high Motion Strength setting in Leonardo AI?",
+        "response": "Use high Motion Strength (7+) only when the shot involves high-energy physics that naturally involve blurring or chaotic change, such as water splashes, fire, smoke, or fast-moving vehicles. Avoid it for close-up human faces."
+      },
+      {
+        "instruction": "The camera in my AI video is static, but I want a dramatic reveal. How do I guide the movement?",
+        "response": "Use the Camera Motion sliders in the Motion Tool. A 'Tilt Up' or 'Zoom Out' setting can create a reveal effect. For more control, ensure your initial prompt includes cinematic keywords like 'slow reveal' or 'dolly shot' to prepare the model for that movement."
+      },
+      {
+        "instruction": "My video generation is inconsistent with my character's hair color. How do I fix this?",
+        "response": "Use the 'Image Guidance' feature with a Character Reference image. By uploading a static image of the character and selecting 'Character Reference' in the settings, the model will prioritize maintaining those specific traits throughout the video generation."
+      }
+    ]
+  },
+  {
+    "source": {
+      "title": "AI Image & Video Generation API for Developers",
+      "channel": "Leonardo.ai Official",
+      "url": "https://leonardo.ai/api/",
+      "date_watched": "April 21, 2026",
+      "relevance_tags": [
+        "API Integration",
+        "ControlNet",
+        "Motion Generation",
+        "Cinematic Composition",
+        "Workflow Automation"
+      ]
+    },
+    "quality_assessment": {
+      "score": 4,
+      "reasoning": "High technical density regarding API-driven control systems and structural consistency. Provides strong signal on bridging the gap between developer-side automation and directorial visual control.",
+      "coverage_check": [
+        "prompt_craft",
+        "camera_work",
+        "composition",
+        "workflow",
+        "model_config"
+      ]
+    },
+    "techniques": [
+      {
+        "name": "Structural Guidance via ControlNet",
+        "category": "composition",
+        "description": "Utilizing edge, depth, or pose maps to force the AI to respect specific geometric boundaries or character positioning.",
+        "when_to_use": "Use WHEN the spatial relationship between subjects is non-negotiable, such as architectural visualization or complex multi-character blocking.",
+        "example_prompt": "Cinematic wide shot of a futuristic library, geometric symmetry, depth map guidance, hyper-realistic textures, 8k resolution.",
+        "anti_pattern": "Relying solely on text prompts for complex layouts, which often leads to 'compositional drifting' where subjects overlap or float.",
+        "model_specific": "Leonardo ControlNet API"
+      },
+      {
+        "name": "Dynamic Motion Scaling",
+        "category": "camera_work",
+        "description": "Adjusting the 'motion' parameter to dictate the velocity and variance of movement in a generated video clip.",
+        "when_to_use": "Use low values (1-3) for environmental 'breathing' and high values (7-10) for kinetic action or rapid camera pans.",
+        "example_prompt": "Drone shot flying over a volcanic eruption, high motion intensity, flowing lava, smoke plumes, cinematic speed.",
+        "anti_pattern": "Setting motion to maximum for portrait shots, which typically results in unnatural facial warping or 'liquification' of features.",
+        "model_specific": "Leonardo Motion"
+      },
+      {
+        "name": "Prompt Magic Expansion",
+        "category": "prompt_craft",
+        "description": "Using an LLM-based enhancer to inject technical cinematic terminology into basic user concepts.",
+        "when_to_use": "Use WHEN a creative vision is clear but the technical vocabulary for lighting (e.g., 'Rembrandt lighting') or lens choice is lacking.",
+        "example_prompt": "Basic: 'A man in a forest.' Enhanced: 'Moody portrait of a rugged man in a dense pine forest, dappled sunlight, anamorphic lens flares, 35mm film grain.'",
+        "anti_pattern": "Over-prompting with redundant adjectives like 'best quality' or 'masterpiece' which consumes token attention without adding specific directorial intent.",
+        "model_specific": "Leonardo Phoenix / Prompt Magic"
+      }
+    ],
+    "prompt_examples": [
+      {
+        "prompt_text": "Close-up of a cyberpunk pilot in a cockpit, reflections of neon city lights in the helmet visor, shallow depth of field, f/1.8, bokeh background, teal and orange color grading.",
+        "context": "Character concept art for a sci-fi short film.",
+        "result_quality": "High detail on reflections and skin texture.",
+        "improvement_notes": "Increase 'initial image strength' if using a specific actor's likeness to prevent the model from drifting toward generic faces."
+      },
+      {
+        "prompt_text": "Time-lapse of a flower blooming in a dark studio, single spotlight, dramatic shadows, macro photography, 4k video, smooth transition.",
+        "context": "B-roll generation for a nature documentary.",
+        "result_quality": "Fluid motion with consistent lighting.",
+        "improvement_notes": "Ensure the 'motion' slider is set to a moderate level to avoid flickering during the petal expansion."
+      }
+    ],
+    "principles": [
+      {
+        "principle": "Deterministic Composition",
+        "reasoning": "Directing requires precision; using reference images (Image-to-Image) or ControlNets ensures the AI acts as a tool for the director's vision rather than a random generator.",
+        "qa_pair": {
+          "question": "How do I ensure a character remains on the left third of the frame across multiple iterations?",
+          "answer": "Use a Composition ControlNet or a consistent sketch as an Image-to-Image reference to lock the spatial coordinates of the subject."
+        }
+      },
+      {
+        "principle": "Scale vs. Fidelity Tradeoff",
+        "reasoning": "When using APIs for high-volume production, one must balance generation speed (Alchemy/Flash models) with final render quality (Phoenix/SDXL models).",
+        "qa_pair": {
+          "question": "When should I use a 'Flash' model versus a high-fidelity 'Phoenix' model in a production pipeline?",
+          "answer": "Use Flash models for rapid storyboarding and layout testing; switch to Phoenix or specialized fine-tuned models for final asset generation."
+        }
+      }
+    ],
+    "workflow_steps": [
+      {
+        "step": 1,
+        "action": "Generate a low-resolution storyboard frame using a fast model.",
+        "tool_or_node": "Leonardo API (Flash Model)",
+        "parameter_notes": "Focus on composition and basic color palettes."
+      },
+      {
+        "step": 2,
+        "action": "Apply a Depth or Canny ControlNet based on the chosen storyboard.",
+        "tool_or_node": "ControlNet API",
+        "parameter_notes": "Sets the 'skeleton' for the high-res render."
+      },
+      {
+        "step": 3,
+        "action": "Re-run the prompt through a high-fidelity model using the ControlNet guidance.",
+        "tool_or_node": "Leonardo Phoenix",
+        "parameter_notes": "Increase inference steps for maximum detail."
+      },
+      {
+        "step": 4,
+        "action": "Animate the static high-res asset.",
+        "tool_or_node": "Leonardo Motion API",
+        "parameter_notes": "Set motion strength between 4-6 for realistic cinematic movement."
+      }
+    ],
+    "training_pairs": [
+      {
+        "instruction": "Explain when to use a 'Motion Strength' of 10 in a video prompt.",
+        "response": "Use a Motion Strength of 10 when you want to simulate high-energy sequences such as explosions, fast-paced vehicle chases, or chaotic weather patterns. However, monitor for 'frame tearing' where the AI loses structural consistency due to the high delta between frames."
+      },
+      {
+        "instruction": "How can I prevent a character's face from changing between two different shot angles?",
+        "response": "Utilize 'Content Reference' or 'Character Reference' features via the API. By providing a source image of the character, you can guide the model to maintain facial features, clothing, and hair across different camera positions."
+      },
+      {
+        "instruction": "What is the directorial benefit of using 'Negative Prompts' in a cinematic workflow?",
+        "response": "Negative prompts act as 'visual constraints.' By explicitly excluding elements like 'deformed limbs,' 'cartoonish textures,' or 'flat lighting,' you force the model to prioritize the professional cinematic aesthetic defined in your positive prompt."
+      },
+      {
+        "instruction": "I need to generate a series of images that all share a specific 'Film Noir' aesthetic. What is the most efficient way to do this at scale?",
+        "response": "Use a 'Style Reference' image within the API. This allows the model to extract the lighting, contrast, and grain characteristics of your Noir sample and apply them consistently to every new prompt without needing to describe the style repeatedly."
+      },
+      {
+        "instruction": "Why would a director choose 'Depth Map' control over 'Edge Detection' for a scene inside a room?",
+        "response": "Depth maps are superior for interior scenes because they preserve the 'Z-axis' (distance), ensuring that furniture and walls are placed correctly in 3D space. Edge detection (Canny) is often too rigid, picking up every tiny texture line, which can make the scene look cluttered or overly etched."
+      }
+    ]
+  }
+]

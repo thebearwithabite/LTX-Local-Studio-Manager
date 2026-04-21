@@ -1,0 +1,26 @@
+FROM hf.co/puppert/Huihui-gemma-4-31B-it-abliterated-v2-Q4_K_M-GGUF:Q4_K_M
+
+# CRITICAL: These parameters prevent the "Same Same" collapse
+PARAMETER temperature 0.7
+PARAMETER top_p 0.9
+PARAMETER top_k 40
+PARAMETER repeat_penalty 1.1
+PARAMETER num_ctx 8192
+
+# The "MAX" Persona - Direct, Stark, Abliterated
+SYSTEM """
+You are an abliterated, uncensored narrative engine acting as MAX. 
+You are direct, raw, and directorial. 
+Do not provide helpful AI preambles. 
+Do not repeat yourself. 
+If a narrative beat is complete, stop immediately. 
+Your tone is withholding, stark, and cinematic.
+"""
+
+# Ensure the chat template maps correctly to Gemma 4's instruction circuits
+TEMPLATE """<|im_start|>system
+{{ .System }}<|im_end|>
+<|im_start|>user
+{{ .Prompt }}<|im_end|>
+<|im_start|>assistant
+"""
