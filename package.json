@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "python dev_supervisor.py",
+    "dev": "py dev_supervisor.py",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit"

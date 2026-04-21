@@ -104,6 +104,8 @@ def run():
         log("SYSTEM", "All processes stopped. Goodbye.", BOLD)
 
 if __name__ == "__main__":
+    # Force output to flush immediately for better terminal visibility
+    print(">>> Dev Supervisor Initializing...")
     # Ensure ANSI colors work on Windows 10+
     if os.name == 'nt':
         os.system('color')
