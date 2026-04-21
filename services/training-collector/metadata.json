@@ -1,0 +1,5 @@
+{
+  "name": "Director's Assistant - Dataset Curator",
+  "description": "An intelligent search agent that finds and summarizes information from the web to curate training data for AI filmmakers.",
+  "requestFramePermissions": []
+}
