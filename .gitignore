@@ -1,4 +1,36 @@
+# Local Environment and Credentials
+.env
+.env.local
+firebase-applet-config.json
+firebase-blueprint.json
+
+# Dependencies
+node_modules/
+execution/venv/
+
+# Build and Temp
+dist/
+.tmp/
+temp/
 migrated_prompt_history
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Project-specific
 GIT_*
 
 # Local environment files — never commit secrets

@@ -1,0 +1,3 @@
+@echo off
+echo Starting LTX Studio...
+node_modules\.bin\concurrently.cmd "vite" "execution\venv\Scripts\python.exe execution\api.py"

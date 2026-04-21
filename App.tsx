@@ -59,31 +59,7 @@ import {
   VEO_COST_PER_SECOND,
 } from './types';
 import { metadata } from './metadata';
-import { auth, db, storage } from './firebase';
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
-  collection, 
-  onSnapshot,
-  query,
-  where,
-  getDocFromServer,
-  getDocs,
-  orderBy,
-  limit
-} from 'firebase/firestore';
-import { 
-  ref, 
-  uploadString, 
-  getDownloadURL 
-} from 'firebase/storage';
-import { 
-  onAuthStateChanged, 
-  signInWithPopup, 
-  GoogleAuthProvider,
-  signOut 
-} from 'firebase/auth';
+
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const API_CALL_DELAY_MS = 1200;
@@ -100,56 +76,7 @@ const fileToBase64 = (file: File): Promise<string> =>
     reader.onerror = (error) => reject(error);
   });
 
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
 
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
@@ -182,184 +109,103 @@ const App: React.FC = () => {
   });
   const hasWarnedLargeProject = useRef(false);
   const [currentThoughts, setCurrentThoughts] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<any>({ uid: 'local_bear' });
 
-  // Firebase Auth
+  // Load the most recent local project
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      if (u) {
-        // Try to load the most recent project for this user
-        loadLastProjectForUser(u.uid);
-      }
-    });
-
-    // Connection test
-    const testConnection = async () => {
+    const loadLastLocalProject = async () => {
       try {
-        await getDocFromServer(doc(db, 'test', 'connection'));
-      } catch (error) {
-        if(error instanceof Error && error.message.includes('the client is offline')) {
-          console.error("Please check your Firebase configuration. ");
+        const resp = await fetch('http://127.0.0.1:8000/projects');
+        const projects = await resp.json();
+        if (projects && projects.length > 0) {
+          const lastProject = projects[0];
+          setProjectName(lastProject.name);
+          
+          const shotsResp = await fetch(`http://127.0.0.1:8000/projects/${lastProject.id}/shots`);
+          const shots = await shotsResp.json();
+          
+          // Reconstruct shotbook
+          const mappedShots = shots.map((s: any) => ({
+             ...s,
+             veoJson: s.veo_json_blob,
+             id: s.id,
+             pitch: s.pitch,
+             status: s.status
+          }));
+          setShotBook(mappedShots);
+          setAppState(AppState.SUCCESS);
+          addLogEntry(`Restored local project: ${lastProject.name}`, LogType.SUCCESS);
         }
+      } catch (e) {
+        console.error('Error loading last project:', e);
       }
     };
-    testConnection();
-
-    return () => unsubscribe();
+    loadLastLocalProject();
   }, []);
 
   const handleLogin = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-      addLogEntry('Signed in successfully.', LogType.SUCCESS);
-    } catch (e) {
-      console.error('Login error:', e);
-      addLogEntry('Failed to sign in. Please check your browser settings.', LogType.ERROR);
-    }
+      addLogEntry('Local mode automatically signed in.', LogType.SUCCESS);
   };
 
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      addLogEntry('Signed out.', LogType.INFO);
-    } catch (e) {
-      console.error('Logout error:', e);
-    }
+      addLogEntry('Local mode cannot be signed out.', LogType.INFO);
   };
 
-  const uploadImageToStorage = async (base64: string, path: string) => {
-    const storageRef = ref(storage, path);
-    await uploadString(storageRef, base64, 'base64');
-    return await getDownloadURL(storageRef);
-  };
-
-  const loadLastProjectForUser = async (uid: string) => {
-    try {
-      const q = query(
-        collection(db, 'projects'),
-        where('userId', '==', uid),
-        orderBy('updatedAt', 'desc'),
-        limit(1)
-      );
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        const projectDoc = querySnapshot.docs[0];
-        const data = projectDoc.data();
-        
-        // Load shots
-        const shotsCol = collection(db, 'projects', projectDoc.id, 'shots');
-        const shotsSnapshot = await getDocs(shotsCol);
-        const shots = shotsSnapshot.docs.map(d => d.data() as Shot);
-        
-        setProjectName(data.projectName);
-        setShotBook(shots);
-        setAssets(data.assets || []);
-        setGuidanceFrames(data.guidanceFrames || []);
-        setLogEntries(data.logEntries || []);
-        setApiCallSummary(data.apiCallSummary || {
-          pro: 0, flash: 0, image: 0, veo: 0, proTokens: {input: 0, output: 0}, flashTokens: {input: 0, output: 0}
-        });
-        setScenePlans(data.scenePlans || []);
-        setAppState(AppState.SUCCESS);
-        addLogEntry(`Restored project: ${data.projectName}`, LogType.SUCCESS);
-      }
-    } catch (e) {
-      console.error('Error loading last project:', e);
-    }
-  };
-
-  const saveProjectToFirebase = async (force: boolean = false) => {
-    if (!user || !projectName) return;
+  const saveProjectToLocalDb = async (force: boolean = false) => {
+    if (!projectName) return;
     if (!force && appState !== AppState.SUCCESS && assets.length === 0) return;
 
     try {
-      const projectRef = doc(db, 'projects', projectName);
+      const pid = projectName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+      // Create project
+      await fetch('http://127.0.0.1:8000/projects', {
+         method: 'POST',
+         headers: {'Content-Type': 'application/json'},
+         body: JSON.stringify({ id: pid, name: projectName })
+      });
+
+      // Upload Shots
+      if (shotBook) {
+        for (const shot of shotBook) {
+          await fetch('http://127.0.0.1:8000/shots', {
+             method: 'POST',
+             headers: {'Content-Type': 'application/json'},
+             body: JSON.stringify({
+                id: shot.id,
+                project_id: pid,
+                pitch: shot.pitch,
+                status: shot.status,
+                veo_json_blob: shot.veoJson || null
+             })
+          });
+        }
+      }
       
       // Upload Assets
-      const updatedAssets = await Promise.all(assets.map(async (asset) => {
-        if (asset.image && asset.image.base64.length > 1000) { // Only upload if it's base64, not a URL already
-          const url = await uploadImageToStorage(asset.image.base64, `projects/${projectName}/assets/${asset.id}`);
-          return { ...asset, image: { ...asset.image, base64: url } }; // We'll store the URL in the base64 field for simplicity or rename it
-        }
-        return asset;
-      }));
-
-      // Upload Guidance Frames
-      const updatedGuidance = await Promise.all(guidanceFrames.map(async (gf) => {
-        if (gf.image && gf.image.base64.length > 1000) {
-          const url = await uploadImageToStorage(gf.image.base64, `projects/${projectName}/guidance/${gf.id}`);
-          return { ...gf, image: { ...gf.image, base64: url } };
-        }
-        return gf;
-      }));
-
-      // Upload Shots & Keyframes
-      let updatedShotBook = shotBook;
-      if (shotBook) {
-        updatedShotBook = await Promise.all(shotBook.map(async (shot) => {
-          let keyframeUrl = shot.keyframeImage;
-          if (shot.keyframeImage && shot.keyframeImage.length > 1000) {
-            keyframeUrl = await uploadImageToStorage(shot.keyframeImage, `projects/${projectName}/shots/${shot.id}/keyframe`);
-          }
-          
-          let historyUrls = shot.keyframeHistory;
-          if (shot.keyframeHistory) {
-            historyUrls = await Promise.all(shot.keyframeHistory.map(async (img, idx) => {
-              if (img.length > 1000) {
-                return await uploadImageToStorage(img, `projects/${projectName}/shots/${shot.id}/history_${idx}`);
-              }
-              return img;
-            }));
-          }
-
-          return { ...shot, keyframeImage: keyframeUrl, keyframeHistory: historyUrls };
-        }));
+      for (const asset of assets) {
+          await fetch('http://127.0.0.1:8000/assets', {
+             method: 'POST',
+             headers: {'Content-Type': 'application/json'},
+             body: JSON.stringify({
+                id: asset.id,
+                shot_id: shotBook?.[0]?.id || "", // Fallback
+                type: asset.type === 'video' ? 'video' : 'keyframe',
+                local_path: asset.name
+             })
+          });
       }
 
-      const stateToSave = {
-        projectName,
-        logEntries: logEntries.slice(-50), // Keep last 50 logs
-        apiCallSummary,
-        scenePlans,
-        lastPrompt,
-        updatedAt: new Date().toISOString(),
-        userId: user.uid,
-        assets: updatedAssets,
-        guidanceFrames: updatedGuidance
-      };
-
-      try {
-        await setDoc(projectRef, stateToSave, { merge: true });
-      } catch (e) {
-        handleFirestoreError(e, OperationType.WRITE, `projects/${projectName}`);
-      }
-      
-      if (updatedShotBook) {
-        const shotsCol = collection(projectRef, 'shots');
-        for (const shot of updatedShotBook) {
-          try {
-            await setDoc(doc(shotsCol, shot.id), shot, { merge: true });
-          } catch (e) {
-            handleFirestoreError(e, OperationType.WRITE, `projects/${projectName}/shots/${shot.id}`);
-          }
-        }
-      }
-
-      addLogEntry('Project synced to cloud storage.', LogType.SUCCESS);
+      addLogEntry('Project synced to local DB.', LogType.SUCCESS);
     } catch (e) {
-      console.error('Firebase save error:', e);
-      if (e instanceof Error && !e.message.startsWith('{')) {
-        addLogEntry('Failed to sync to cloud.', LogType.ERROR);
-      }
+      console.error('Local DB save error:', e);
+      addLogEntry('Failed to sync to local DB.', LogType.ERROR);
     }
   };
 
-  // Auto-save to Firebase
+  // Auto-save to Local DB
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (appState === AppState.SUCCESS) saveProjectToFirebase();
+      if (appState === AppState.SUCCESS) saveProjectToLocalDb();
     }, 5000);
     return () => clearTimeout(timer);
   }, [shotBook, projectName, assets]);
@@ -655,7 +501,7 @@ const App: React.FC = () => {
       if (stopGenerationRef.current) throw new Error("Stopped.");
 
       addLogEntry('Generating shot list...', LogType.INFO);
-      const shotListData = await generateShotList(scriptInput);
+      const shotListData = await generateShotList(scriptInput, assets);
       const rawShots = shotListData.result;
       if (shotListData.thoughts) setCurrentThoughts(shotListData.thoughts);
       updateApiSummary(shotListData.tokens, 'pro');

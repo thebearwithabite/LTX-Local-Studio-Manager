@@ -24,6 +24,8 @@ const getAiClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 // --- SYSTEM PROMPTS ---
 const SYSTEM_PROMPT_SHOTLIST = `
 You are a Script Analysis Engine. Your task is to break down the provided creative input (script, treatment, or concept) into a sequence of discrete shots.
+You have been provided with visual assets (Characters, Locations, Styles). You MUST use "Visual Inference" to inform your analysis. 
+If a reference image shows a specific mood, lighting, or setting, ensure your shot pitches reflect that visual reality.
 For each shot, provide a unique 'shot_id' (e.g., 'ep1_scene1_shot1') and a concise, 1-2 sentence natural language 'pitch' describing the shot's action and mood.
 Your final output MUST be a single, valid JSON array of objects, where each object contains only the 'shot_id' and 'pitch' keys. Do not output any other text or explanation.
 `;
@@ -79,8 +81,9 @@ YOUR TASK (AMENDED):
 5.  When creating an "extend" chain, ensure each individual \`veo_shot.scene.duration_s\` remains at or below 8 seconds, but the total \`target_duration_s\` across the entire chain reflects the runtime goal from the SCENE PLAN.
 6.  The 'shot_id' in the nested 'veo_shot' object MUST EXACTLY MATCH the provided shot_id.
 7.  If unit_type is 'extend', you MUST include a 'directorNotes' field containing a natural language summary of the segment's narrative intent, style/tone guidance, rhythm, audio emphasis, and continuity strategy. This field should be absent for 'shot' unit_type.
-8.  IMPORTANT: Your response MUST be valid JSON. Do NOT repeat the script or scene context in your output. Be concise.
-9.  Your final output MUST be only the single, valid JSON object matching the WRAPPER_SCHEMA. Do not output any other text, explanation, or markdown formatting.
+8.  VISUAL INFERENCE: You are provided with direct visual references for Characters and Locations. Your VEO JSON must strictly reflect the lighting, textures, and mood visible in these images. If the reference for 'Ryan' shows him in a dim blue room, prioritize 'Low-key blue lighting' in the technical specs.
+9.  IMPORTANT: Your response MUST be valid JSON. Do NOT repeat the script or scene context in your output. Be concise.
+10. Your final output MUST be only the single, valid JSON object matching the WRAPPER_SCHEMA. Do not output any other text, explanation, or markdown formatting.
 
 --- WRAPPER_SCHEMA ---
 {
@@ -257,6 +260,19 @@ const cleanJsonOutput = (rawText: string): string => {
   return cleaned.trim();
 };
 
+// Helper to convert ProjectAsset to InlineData for Gemini
+const assetToInlineData = (asset: ProjectAsset) => {
+  if (!asset.image) return null;
+  return {
+    inlineData: {
+      data: asset.image.base64,
+      mimeType: asset.image.mimeType
+    }
+  };
+};
+
+// Simple JSON repair to handle truncated output
+
 // Simple JSON repair to handle truncated output
 const attemptJsonRepair = (jsonStr: string): string => {
   try {
@@ -423,11 +439,22 @@ export const extractAssetsFromScript = async (
 
 export const generateShotList = async (
   script: string,
+  assets: ProjectAsset[] = []
 ): Promise<GenerateResult<{id: string; pitch: string}[]>> => {
   const ai = getAiClient();
+  
+  const contentParts: any[] = [{ text: `SCRIPT:\n${script}` }];
+  assets.filter(a => a.image).forEach(asset => {
+    const data = assetToInlineData(asset);
+    if (data) {
+      contentParts.push({ text: `REFERENCE [${asset.type.toUpperCase()}]: ${asset.name}` });
+      contentParts.push(data);
+    }
+  });
+
   const response = await ai.models.generateContent({
     model: 'gemini-3.1-pro-preview',
-    contents: script,
+    contents: contentParts,
     config: {
       systemInstruction: SYSTEM_PROMPT_SHOTLIST,
       responseMimeType: 'application/json',
@@ -571,12 +598,25 @@ export const generateVeoJson = async (
   id: string,
   fullScript: string,
   scenePlan: ScenePlan | null,
+  assets: ProjectAsset[] = []
 ): Promise<GenerateResult<VeoShotWrapper>> => {
   const ai = getAiClient();
-  const prompt = `SHOT ID: "${id}"\nPITCH: "${pitch}"\nSCENE PLAN:\n${JSON.stringify(scenePlan || {})}\nSCRIPT:\n${fullScript}`;
+  
+  const contentParts: any[] = [
+    { text: `SHOT ID: "${id}"\nPITCH: "${pitch}"\nSCENE PLAN:\n${JSON.stringify(scenePlan || {})}\nSCRIPT:\n${fullScript}` }
+  ];
+
+  assets.filter(a => a.image).forEach(asset => {
+    const data = assetToInlineData(asset);
+    if (data) {
+      contentParts.push({ text: `IMAGE REFERENCE - ${asset.type.toUpperCase()} - ${asset.name}` });
+      contentParts.push(data);
+    }
+  });
+
   const response = await ai.models.generateContent({
     model: 'gemini-3.1-pro-preview', 
-    contents: prompt,
+    contents: contentParts,
     config: {
       systemInstruction: SYSTEM_PROMPT_SINGLE_SHOT_JSON,
       responseMimeType: 'application/json',
