@@ -12,7 +12,7 @@ SIGNAL DENSITY: Keep descriptions concise but specific.`;
 export async function runAutonomousScrape(query: string) {
     console.log(`[AUTONOMOUS SCRAPE] Starting for query: ${query}`);
     const model = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash",
+        model: "gemini-3.1-flash-lite",
         systemInstruction: SYSTEM_INSTRUCTION 
     });
 

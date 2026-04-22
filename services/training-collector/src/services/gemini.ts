@@ -156,7 +156,7 @@ CATEGORIES: prompt_craft, camera_work, lighting, composition, continuity, audio,
 
 export async function findSources(query: string) {
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-3.1-flash-lite",
     contents: `Search for and find 5 high-quality, distinct sources (videos or articles) about: ${query}. 
     Focus on AI video generation, filmmaking, cinematography, and prompt engineering.`,
     config: {
@@ -176,7 +176,7 @@ export async function findSources(query: string) {
 
 export async function curateSource(source: {title: string, url: string, channel: string}) {
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-3.1-flash-lite",
     contents: `Analyze the following source: Title: ${source.title}, URL: ${source.url}, Channel: ${source.channel}.
     Extract structured training data for an AI Director's Assistant model based on this content.`,
     config: {
@@ -203,7 +203,7 @@ export async function curateSource(source: {title: string, url: string, channel:
 
 export async function curateFromUrl(url: string) {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-flash-lite",
       contents: `Analyze the content at this URL: ${url}. 
       Extract structured training data for an AI Director's Assistant model.`,
       config: {

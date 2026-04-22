@@ -15,7 +15,7 @@ This module is the "brain" of the autonomous studio, responsible for identifying
     *   Hosts the **Autonomous Scraper Service** which responds to the scorer's gap analysis.
 
 3.  **Reflective Brain (`scraper_service.ts`)**:
-    *   Uses Gemini 1.5 Flash to search and curate high-quality filmmaking techniques from YouTube and articles.
+    *   Uses **Gemini 3.1 Flash-Lite** to search and curate high-quality filmmaking techniques from YouTube and articles.
 
 ## System Workflow
 
