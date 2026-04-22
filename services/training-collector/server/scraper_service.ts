@@ -19,7 +19,17 @@ export async function runAutonomousScrape(query: string) {
     try {
         // 1. Search for sources
         const searchPrompt = `Search for 5 high-quality, distinct sources about: ${query}. Respond with a JSON array of objects containing {title, url, channel}.`;
-        const searchResult = await model.generateContent(searchPrompt);
+        const searchResult = await model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: searchPrompt }] }],
+            generationConfig: {
+                responseMimeType: "application/json"
+            },
+            // @ts-ignore - Support for Gemini 3.1 Thinking Mode
+            thinkingConfig: {
+                thinkingLevel: "high",
+                includeThoughts: true
+            }
+        });
         const searchResponse = await searchResult.response;
         const text = searchResponse.text();
         
@@ -35,7 +45,17 @@ export async function runAutonomousScrape(query: string) {
         for (const source of sources) {
             console.log(`  Curating: ${source.title}`);
             const curationPrompt = `Analyze the content at ${source.url}. Extract structured training data (instruction/response pairs, techniques, principles). Output as JSON.`;
-            const curationResult = await model.generateContent(curationPrompt);
+            const curationResult = await model.generateContent({
+                contents: [{ role: 'user', parts: [{ text: curationPrompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json"
+                },
+                // @ts-ignore - Support for Gemini 3.1 Thinking Mode
+                thinkingConfig: {
+                    thinkingLevel: "high",
+                    includeThoughts: true
+                }
+            });
             const curationResponse = await curationResult.response;
             const curationData = JSON.parse(curationResponse.text().substring(curationResponse.text().indexOf('{'), curationResponse.text().lastIndexOf('}') + 1));
             dataset.push(curationData);

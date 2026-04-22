@@ -166,7 +166,12 @@ export async function findSources(query: string) {
       },
       responseMimeType: "application/json",
       responseSchema: SOURCE_LIST_SCHEMA,
-      maxOutputTokens: 8192
+      maxOutputTokens: 8192,
+      // @ts-ignore
+      thinkingConfig: {
+        thinkingLevel: "high",
+        includeThoughts: true
+      }
     }
   });
 
@@ -193,7 +198,12 @@ export async function curateSource(source: {title: string, url: string, channel:
         },
         required: ["result"]
       },
-      maxOutputTokens: 8192
+      maxOutputTokens: 8192,
+      // @ts-ignore
+      thinkingConfig: {
+        thinkingLevel: "high",
+        includeThoughts: true
+      }
     }
   });
 
@@ -214,7 +224,12 @@ export async function curateFromUrl(url: string) {
         },
         responseMimeType: "application/json",
         responseSchema: CURATOR_SCHEMA,
-        maxOutputTokens: 8192
+        maxOutputTokens: 8192,
+        // @ts-ignore
+        thinkingConfig: {
+          thinkingLevel: "high",
+          includeThoughts: true
+        }
       }
     });
   
