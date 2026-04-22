@@ -1,7 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-
+// The GoogleGenAI instance will be initialized inside the functions to ensure process.env is loaded first.
 export const CURATOR_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -155,6 +154,7 @@ RULES FOR EXTRACTION:
 CATEGORIES: prompt_craft, camera_work, lighting, composition, continuity, audio, workflow, model_config.`;
 
 export async function findSources(query: string) {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
   const response = await ai.models.generateContent({
     model: "gemini-3.1-flash-lite",
     contents: `Search for and find 5 high-quality, distinct sources (videos or articles) about: ${query}. 
@@ -180,6 +180,7 @@ export async function findSources(query: string) {
 }
 
 export async function curateSource(source: {title: string, url: string, channel: string}) {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
   const response = await ai.models.generateContent({
     model: "gemini-3.1-flash-lite",
     contents: `Analyze the following source: Title: ${source.title}, URL: ${source.url}, Channel: ${source.channel}.
@@ -212,6 +213,7 @@ export async function curateSource(source: {title: string, url: string, channel:
 }
 
 export async function curateFromUrl(url: string) {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
     const response = await ai.models.generateContent({
       model: "gemini-3.1-flash-lite",
       contents: `Analyze the content at this URL: ${url}. 

@@ -266,10 +266,10 @@ const attemptJsonRepair = (jsonStr: string): string => {
   } catch (e) {
     console.warn("JSON Parse failed, attempting simple repair...");
     let repaired = jsonStr.trim();
-    
+
     // Check for truncated trailing comma
     if (repaired.endsWith(',')) {
-        repaired = repaired.substring(0, repaired.length - 1);
+      repaired = repaired.substring(0, repaired.length - 1);
     }
 
     // Attempt to close objects/arrays if missing
@@ -279,21 +279,21 @@ const attemptJsonRepair = (jsonStr: string): string => {
     let closeSquares = (repaired.match(/\]/g) || []).length;
 
     while (closeSquares < openSquares) {
-        repaired += "]";
-        closeSquares++;
+      repaired += "]";
+      closeSquares++;
     }
     while (closeBraces < openBraces) {
-        repaired += "}";
-        closeBraces++;
+      repaired += "}";
+      closeBraces++;
     }
 
     try {
-        JSON.parse(repaired);
-        console.log("JSON repair successful.");
-        return repaired;
+      JSON.parse(repaired);
+      console.log("JSON repair successful.");
+      return repaired;
     } catch (e2) {
-        console.warn("JSON repair failed.", e2);
-        return jsonStr;
+      console.warn("JSON repair failed.", e2);
+      return jsonStr;
     }
   }
 };
@@ -303,9 +303,9 @@ const getImageBase64 = (response: GenerateContentResponse): string => {
   const parts = response.candidates?.[0]?.content?.parts;
   if (parts) {
     for (const part of parts) {
-        if (part.inlineData?.data) {
-            return part.inlineData.data;
-        }
+      if (part.inlineData?.data) {
+        return part.inlineData.data;
+      }
     }
   }
   throw new Error('No image data found in response.');
@@ -322,7 +322,7 @@ interface GenerateResult<T> {
  */
 export const executeMcpAction = async (shot: Shot, tools: McpTool[]) => {
   const ai = getAiClient();
-  
+
   const functionDeclarations = tools.map(tool => ({
     name: tool.name,
     parameters: tool.inputSchema,
@@ -425,7 +425,7 @@ export const extractAssetsFromScript = async (
 export const generateShotList = async (
   script: string,
   assets: ProjectAsset[] = []
-): Promise<GenerateResult<{id: string; pitch: string}[]>> => {
+): Promise<GenerateResult<{ id: string; pitch: string }[]>> => {
   const ai = getAiClient();
   const contentParts: any[] = [{ text: script }];
 
@@ -453,8 +453,8 @@ export const generateShotList = async (
         items: {
           type: Type.OBJECT,
           properties: {
-            shot_id: {type: Type.STRING},
-            pitch: {type: Type.STRING},
+            shot_id: { type: Type.STRING },
+            pitch: { type: Type.STRING },
           },
           required: ['shot_id', 'pitch'],
         },
@@ -463,10 +463,10 @@ export const generateShotList = async (
   });
 
   const cleanedText = cleanJsonOutput(response.text || '');
-  const shotList = JSON.parse(cleanedText) as {shot_id: string; pitch: string}[];
+  const shotList = JSON.parse(cleanedText) as { shot_id: string; pitch: string }[];
 
   return {
-    result: shotList.map((item) => ({id: item.shot_id, pitch: item.pitch})),
+    result: shotList.map((item) => ({ id: item.shot_id, pitch: item.pitch })),
     tokens: {
       input: response.usageMetadata?.promptTokenCount || 0,
       output: response.usageMetadata?.candidatesTokenCount || 0,
@@ -475,10 +475,10 @@ export const generateShotList = async (
 };
 
 export const generateSceneNames = async (
-  shotList: {id: string; pitch: string}[],
+  shotList: { id: string; pitch: string }[],
   script: string,
-): Promise<GenerateResult<{names: Map<string, string>; sceneCount: number}>> => {
-  const scenes = new Map<string, {id: string; pitch: string}[]>();
+): Promise<GenerateResult<{ names: Map<string, string>; sceneCount: number }>> => {
+  const scenes = new Map<string, { id: string; pitch: string }[]>();
   for (const shot of shotList) {
     const lastUnderscore = shot.id.lastIndexOf('_');
     const sceneId = lastUnderscore !== -1 ? shot.id.substring(0, lastUnderscore) : shot.id;
@@ -497,7 +497,7 @@ export const generateSceneNames = async (
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: { 
+      config: {
         systemInstruction: SYSTEM_PROMPT_SCENE_NAME,
         thinkingConfig: { includeThoughts: true }
       },
@@ -513,7 +513,7 @@ export const generateSceneNames = async (
   });
 
   const results = await Promise.all(scenePromises);
-  
+
   results.forEach(res => {
     totalInputTokens += res.inputTokens;
     totalOutputTokens += res.outputTokens;
@@ -542,19 +542,19 @@ export const generateScenePlan = async (
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          scene_id: {type: Type.STRING},
-          scene_title: {type: Type.STRING},
-          goal_runtime_s: {type: Type.INTEGER},
+          scene_id: { type: Type.STRING },
+          scene_title: { type: Type.STRING },
+          goal_runtime_s: { type: Type.INTEGER },
           beats: {
             type: Type.ARRAY,
             items: {
               type: Type.OBJECT,
               properties: {
-                beat_id: {type: Type.STRING},
-                label: {type: Type.STRING},
-                priority: {type: Type.INTEGER},
-                min_s: {type: Type.INTEGER},
-                max_s: {type: Type.INTEGER},
+                beat_id: { type: Type.STRING },
+                label: { type: Type.STRING },
+                priority: { type: Type.INTEGER },
+                min_s: { type: Type.INTEGER },
+                max_s: { type: Type.INTEGER },
               },
               required: ['beat_id', 'label', 'priority', 'min_s', 'max_s'],
             },
@@ -562,8 +562,8 @@ export const generateScenePlan = async (
           extend_policy: {
             type: Type.OBJECT,
             properties: {
-              allow_extend: {type: Type.BOOLEAN},
-              extend_granularity_s: {type: Type.INTEGER},
+              allow_extend: { type: Type.BOOLEAN },
+              extend_granularity_s: { type: Type.INTEGER },
               criteria: { type: Type.ARRAY, items: { type: Type.STRING } },
             },
             required: ['allow_extend', 'extend_granularity_s', 'criteria'],
@@ -592,13 +592,13 @@ export const generateVeoJson = async (
   const ai = getAiClient();
   const prompt = `SHOT ID: "${id}"\nPITCH: "${pitch}"\nSCENE PLAN:\n${JSON.stringify(scenePlan || {})}\nSCRIPT:\n${fullScript}`;
   const response = await ai.models.generateContent({
-    model: 'gemini-3.1-pro-preview', 
+    model: 'gemini-3.1-pro-preview',
     contents: prompt,
     config: {
       systemInstruction: SYSTEM_PROMPT_SINGLE_SHOT_JSON,
       responseMimeType: 'application/json',
       responseSchema: VEO_SHOT_WRAPPER_SCHEMA,
-      maxOutputTokens: 8192, 
+      maxOutputTokens: 8192,
       temperature: 0.2,
     },
   });
@@ -714,7 +714,7 @@ export const selectWinningKeyframe = async (
 
   const winnerId = (response.text || '').trim().match(/\d+/)?.[0];
   const winnerIndex = winnerId ? parseInt(winnerId) : 0;
-  
+
   if (isNaN(winnerIndex) || winnerIndex < 0 || winnerIndex >= renders.length) {
     console.warn("Director failed to select a valid ID, defaulting to index 0");
     return { result: 0, tokens: { input: 0, output: 0 } };
@@ -730,13 +730,13 @@ export const selectWinningKeyframe = async (
 };
 
 export const refineVeoJson = async (currentJson: VeoShotWrapper, feedback: string) => {
-    const ai = getAiClient();
-    const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
-        contents: `CURRENT_JSON: ${JSON.stringify(currentJson, null, 2)}\n\nDIRECTOR_FEEDBACK: ${feedback}`,
-        config: { systemInstruction: SYSTEM_PROMPT_REFINE_JSON, responseMimeType: 'application/json', maxOutputTokens: 8192 }
-    });
-    return { result: JSON.parse(cleanJsonOutput(response.text || '')), tokens: { input: response.usageMetadata?.promptTokenCount || 0, output: response.usageMetadata?.candidatesTokenCount || 0 } };
+  const ai = getAiClient();
+  const response = await ai.models.generateContent({
+    model: 'gemini-3.1-pro-preview',
+    contents: `CURRENT_JSON: ${JSON.stringify(currentJson, null, 2)}\n\nDIRECTOR_FEEDBACK: ${feedback}`,
+    config: { systemInstruction: SYSTEM_PROMPT_REFINE_JSON, responseMimeType: 'application/json', maxOutputTokens: 8192 }
+  });
+  return { result: JSON.parse(cleanJsonOutput(response.text || '')), tokens: { input: response.usageMetadata?.promptTokenCount || 0, output: response.usageMetadata?.candidatesTokenCount || 0 } };
 };
 
 export const generateKeyframePromptText = async (
@@ -744,16 +744,16 @@ export const generateKeyframePromptText = async (
 ): Promise<GenerateResult<string>> => {
   const ai = getAiClient();
   const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Technical Shot Specs: ${JSON.stringify(veoShot)}`,
-      config: { systemInstruction: SYSTEM_PROMPT_KEYFRAME_TEXT }
+    model: 'gemini-3-flash-preview',
+    contents: `Technical Shot Specs: ${JSON.stringify(veoShot)}`,
+    config: { systemInstruction: SYSTEM_PROMPT_KEYFRAME_TEXT }
   });
   return {
     result: (response.text || '').trim(),
-    tokens: { 
-      input: response.usageMetadata?.promptTokenCount || 0, 
-      output: response.usageMetadata?.candidatesTokenCount || 0 
-    }, 
+    tokens: {
+      input: response.usageMetadata?.promptTokenCount || 0,
+      output: response.usageMetadata?.candidatesTokenCount || 0
+    },
   };
 };
 
@@ -777,7 +777,7 @@ export const generateKeyframeImage = async (
     await new Promise(r => setTimeout(r, 2000));
     const status = await getGenerationTaskDetails(generationId);
     const gen = status.generations_by_pk;
-    
+
     if (gen.status === 'COMPLETE') {
       urls = gen.generated_images.map((img: any) => img.url);
       break;
@@ -811,6 +811,6 @@ export const generateKeyframeImage = async (
 
   return {
     result: urls[0],
-    tokens: { input: 0, output: 0 }, 
+    tokens: { input: 0, output: 0 },
   };
 };

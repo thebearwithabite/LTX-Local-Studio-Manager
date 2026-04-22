@@ -90,8 +90,8 @@ export interface LoraTrainRequest {
  */
 const getHeaders = () => {
   // Try to use process.env via Vite's import.meta.env if available, or fall back to process.env for Node.
-  const apiKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_LEONARDO_API_KEY) 
-               || process.env.LEONARDO_API_KEY;
+  const apiKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_LEONARDO_API_KEY)
+    || process.env.LEONARDO_API_KEY;
   if (!apiKey) {
     console.warn("LEONARDO_API_KEY is not defined in environment variables. Requests may fail.");
   }
@@ -175,9 +175,9 @@ export const upscaleImage = async (params: LeonardoUpscaleRequest) => {
     'UPSCALE': 'https://cloud.leonardo.ai/api/rest/v1/variations/upscale',
     'CREATIVE_UPSCALE': 'https://cloud.leonardo.ai/api/rest/v1/variations/creative-upscale'
   };
-  
+
   const endpoint = endpointMap[params.upscaleType || 'HD'];
-  
+
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: getHeaders(),
@@ -284,15 +284,15 @@ export const uploadDatasetImage = async (datasetId: string, extension: string) =
  * Routes to Flux Pro 2.0, Lucid Origin, or Seedream 4.5 based on prompt intent.
  */
 export const generateKeyframeAgnostic = async (
-  prompt: string, 
-  numImages: number = 4, 
+  prompt: string,
+  numImages: number = 4,
   aspectRatio: string = "16:9",
   guidances?: LeonardoGuidanceReference[]
 ) => {
   // Model Selection Logic
   let modelId = LEONARDO_MODELS.FLUX_2_PRO;
   const lowerPrompt = prompt.toLowerCase();
-  
+
   if (lowerPrompt.includes("surreal") || lowerPrompt.includes("dream") || lowerPrompt.includes("abstract")) {
     modelId = LEONARDO_MODELS.SEEDREAM_4_5;
   } else if (lowerPrompt.includes("photoreal") || lowerPrompt.includes("ultra-detailed") || lowerPrompt.includes("cinematic")) {

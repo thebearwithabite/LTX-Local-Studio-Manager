@@ -106,6 +106,19 @@ def analyze_dataset_gaps():
         print(f"  Reflection failed: {e}")
         return ["advanced cinematography techniques", "film pacing and rhythm", "visual storytelling"]
 
+def clean_json_response(raw_text: str) -> str:
+    # Strip thought blocks if they exist
+    if "<|thought|>" in raw_text:
+        # Some models output "done thinking.", some just close the tag with </thought>
+        if "done thinking." in raw_text:
+            raw_text = raw_text.split("done thinking.")[-1]
+        elif "</thought>" in raw_text:
+            raw_text = raw_text.split("</thought>")[-1]
+            
+    # Strip markdown code fences
+    cleaned = raw_text.replace("```json", "").replace("```", "").strip()
+    return cleaned
+
 def score_with_qwen(shot: ShotExtraction):
     payload = {
         "model": MODEL_NAME,
@@ -118,10 +131,44 @@ def score_with_qwen(shot: ShotExtraction):
         response = requests.post(OLLAMA_ENDPOINT, json=payload)
         response.raise_for_status()
         result = response.json()["response"]
-        return json.loads(result)
+        
+        cleaned_result = clean_json_response(result)
+        return json.loads(cleaned_result)
     except Exception as e:
         print(f"Qwen inference failed: {e}")
         return {"score": 0, "reason": "inference_failure"}
+
+def max_audit_rewrite(raw_json: str):
+    """
+    Final gatekeeper. Strips AI apologies and corporate tone.
+    Uses Gemma-4 'Thinking' mode to ensure the rewrite is 'Max'.
+    """
+    system_prompt = """<|think|>
+    You are the final gatekeeper for a 31B cinematic AI dataset. 
+    Rewrite the incoming JSON data to be STARK and DIRECTORIAL.
+    1. STRIP all 'AI apologies' (e.g., 'Sure!', 'I hope this helps').
+    2. DELETE filler sentences.
+    3. REWRITE instruction/response pairs to be direct and authoritative.
+    4. PRESERVE the JSON structure at all costs.
+    """
+    
+    try:
+        payload = {
+            "model": "director-assistant",
+            "prompt": f"JSON TO REWRITE:\n{raw_json}",
+            "system": system_prompt,
+            "format": "json",
+            "stream": False
+        }
+        response = requests.post(OLLAMA_ENDPOINT, json=payload)
+        response.raise_for_status()
+        raw_response = response.json()["response"]
+        cleaned_response = clean_json_response(raw_response)
+        new_json = json.loads(cleaned_response)
+        return json.dumps(new_json)
+    except Exception as e:
+        print(f"[MAX-AUDIT] Rewrite failed, falling back to original: {e}")
+        return raw_json
 
 def run_autonomous_loop():
     print(f"🐱⚡ Starting the DIRECTOR'S ASSISTANT Autonomous Loop (Model: {MODEL_NAME})")
@@ -141,10 +188,10 @@ def run_autonomous_loop():
                 queries = analyze_dataset_gaps()
                 # Trigger the Node.js scraper via API
                 try:
-                    requests.post("http://localhost:3000/api/curate/autonomous", json={"queries": queries})
+                    requests.post("http://127.0.0.1:3000/api/curate/autonomous", json={"queries": queries}, timeout=5)
                     print(f"  [SENT TO SCRAPER] {len(queries)} new targets dispatched.")
-                except:
-                    print("  [WARNING] Could not reach Collector Scraper API.")
+                except Exception as e:
+                    print(f"  [WARNING] Could not reach Collector Scraper API: {e}")
                 last_analysis_time = current_time
 
             # 2. Evaluation / Gatekeeper Cycle
@@ -191,22 +238,28 @@ def run_autonomous_loop():
                                     raw_output=str(prompt_text)
                                 )
                                 
+                                print(f"    -> [INFERENCE] Sending shot {p_index} to Qwen on the 5090...", end=" ", flush=True)
                                 result = score_with_qwen(shot)
                                 score = result.get("score", 0)
                                 reason = result.get("reason", "N/A")
-                                print(f"    Shot {p_index}: Score {score}/10 | {reason[:60]}...")
+                                print(f"Done! Score {score}/10 | {reason[:60]}...")
 
                                 # Routing
                                 if 5 <= score <= 7:
                                     out = os.path.join(GRAY_AREA_DIR, f"gray_{shot_id}.json")
-                                    with open(out, "w") as f: json.dump({"shot": shot.dict(), "score": score, "reason": reason}, f)
+                                    with open(out, "w") as f: json.dump({"shot": shot.model_dump(), "score": score, "reason": reason}, f)
                                 elif score >= 8:
                                     clean_file_path = os.path.join(training_data_dir, CLEAN_SET_FILE)
+                                    
+                                    # [MAX-AUDIT] Tone rewrite pass
+                                    print(f"  [MAX-AUDIT] Score {score}/10 -> Rewriting tone to Stark Directorial Vibe...")
+                                    rewritten_json = max_audit_rewrite(shot.raw_output)
+                                    
                                     with open(clean_file_path, "a") as f:
-                                        f.write(json.dumps({"text": shot.raw_output, "score": score}) + "\n")
+                                        f.write(json.dumps({"text": rewritten_json, "score": score}) + "\n")
                                 else:
                                     out = os.path.join(TRASH_DIR, f"trash_{shot_id}.json")
-                                    with open(out, "w") as f: json.dump({"shot": shot.dict(), "score": score, "reason": reason}, f)
+                                    with open(out, "w") as f: json.dump({"shot": shot.model_dump(), "score": score, "reason": reason}, f)
                                 
                                 time.sleep(0.5)
                         
@@ -214,7 +267,8 @@ def run_autonomous_loop():
                     except Exception as e:
                         print(f"  Error processing {filename}: {e}")
             else:
-                print(".", end="", flush=True)
+                current_time_str = time.strftime("%H:%M:%S", time.localtime())
+                print(f"\r[{current_time_str}] 💤 Monitoring directory. No new training files found (sleeping for {SLEEP_INTERVAL}s)...", end="", flush=True)
                 
             time.sleep(SLEEP_INTERVAL)
             
