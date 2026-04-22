@@ -1135,7 +1135,16 @@ const App: React.FC = () => {
         {appState === AppState.IDLE && (
           <div className="flex flex-col items-center w-full max-w-4xl animate-in fade-in duration-700">
             <div className="mb-8 text-center relative w-full">
-              <div className="absolute top-0 right-0">
+              <div className="absolute top-0 right-0 flex gap-2">
+                <button 
+                  onClick={async () => {
+                    try { await fetch('http://localhost:3000/api/daemon/start', { method: 'POST' }); } catch(e) {}
+                    window.open('http://localhost:3000', '_blank');
+                  }}
+                  className="px-3 py-1 text-xs bg-indigo-900/30 hover:bg-indigo-800/50 text-indigo-300 border border-indigo-800/50 rounded transition-colors"
+                >
+                  Director's Assistant
+                </button>
                 <button 
                   onClick={() => setShowResetDialog(true)}
                   className="px-3 py-1 text-xs bg-red-900/30 hover:bg-red-800/50 text-red-300 border border-red-800/50 rounded transition-colors"

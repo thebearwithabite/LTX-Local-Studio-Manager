@@ -4,6 +4,8 @@ import path from "path";
 import { google } from "googleapis";
 import cookieParser from "cookie-parser";
 import fs from "fs";
+import { startDaemon, stopDaemon, getDaemonStatus } from "./daemon_manager";
+import { runAutonomousScrape } from "./scraper_service";
 
 async function startServer() {
   const app = express();
@@ -27,6 +29,38 @@ async function startServer() {
   // API routes
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // Daemon Management
+  app.post("/api/daemon/start", (req, res) => {
+    const result = startDaemon();
+    res.json(result);
+  });
+
+  app.post("/api/daemon/stop", (req, res) => {
+    const result = stopDaemon();
+    res.json(result);
+  });
+
+  app.get("/api/daemon/status", (req, res) => {
+    res.json(getDaemonStatus());
+  });
+
+  // Autonomous Scraping
+  app.post("/api/curate/autonomous", async (req, res) => {
+    const { queries } = req.body;
+    if (!queries || !Array.isArray(queries)) {
+      return res.status(400).json({ error: "Queries must be an array" });
+    }
+
+    console.log(`[SERVER] Triggered autonomous scrape for ${queries.length} queries.`);
+    
+    // Run in background to avoid timeout
+    queries.forEach(async (query) => {
+        await runAutonomousScrape(query);
+    });
+
+    res.json({ success: true, message: "Autonomous scraping started in background." });
   });
 
   // Google OAuth URL
