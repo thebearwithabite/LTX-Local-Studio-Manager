@@ -1,16 +1,18 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import fs from "fs";
 import path from "path";
+import dns from 'node:dns';
 import { CURATOR_SCHEMA, SOURCE_LIST_SCHEMA } from "../src/services/gemini.ts";
 
-// The GoogleGenAI instance will be initialized inside the function to ensure process.env is loaded first.
+// Force Node to use standard DNS instead of the system's potentially messy resolver
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 const SYSTEM_INSTRUCTION = `You are the LEAD PRODUCTION CURATOR for a high-fidelity Cinematic AI model (31B params).
 Your goal is to extract "Directorial Truths"—the technical DNA behind the image.
 
 RULES FOR EXTRACTION:
 1. THE 'WHY' OVER THE 'WHAT': Do not just list techniques. You must explain the PSYCHOLOGICAL intent (e.g., "A low-angle 24mm lens creates a sense of looming dread by distorting the subject's proximity").
-2. VISUAL INFERENCE: If the source is a video, analyze the LIGHTING GEOMETRY. Identify source direction (Rembrandt, butterfly, kickers) and color temperature (Kelvin shifts).
+2. VISUAL INFERENCE: Analyze the LIGHTING GEOMETRY. Identify source direction (Rembrandt, butterfly, kickers) and color temperature (Kelvin shifts).
 3. 31B SIGNAL DENSITY: We are training a large model. It needs high-entropy, technical descriptions. Use industry terms: 'Chiaroscuro', 'Parallelism', 'Motivated Movement', 'Anamorphic Compression'.
 4. THE ANTI-PATTERN RULE: For every technique, identify the "Amateur Mistake" it solves (e.g., "Technique: Negative Fill; Mistake: Flat, unshaped lighting in small rooms").
 5. PROMPT DYNAMICS: Provide 3-stage prompt evolutions: [Base Idea] -> [Technical Build] -> [Cinematic Final].
@@ -22,15 +24,13 @@ export async function runAutonomousScrape(query: string) {
     console.log(`[AUTONOMOUS SCRAPE] Starting for query: ${query}`);
 
     try {
-        // Initialize AI client here so dotenv has time to inject the API key
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-        
-        // 1. Search for sources using Google Search tool
-        console.log(`\n[AUTONOMOUS SCRAPE 🔍] ---------------------------------------------`);
+        // 1. Search for sources using Google Search tool (FORCED YOUTUBE ONLY)
         console.log(`[AUTONOMOUS SCRAPE 🔍] Querying Google Search for: "${query}"`);
-        console.log(`[AUTONOMOUS SCRAPE 🔍] Waiting for Gemini to find and rank 5 sources...`);
-        const searchPrompt = `Search for and find 5 high-quality, distinct sources (videos or articles) about: ${query}. 
-        Focus on AI video generation, filmmaking, cinematography, and prompt engineering.`;
+        const searchPrompt = `Search for 5 highly technical YouTube videos about: ${query}. 
+        Focus on cinematography, lighting, and AI prompt engineering. 
+        You MUST use the 'site:youtube.com' operator. 
+        Return ONLY valid YouTube video URLs (e.g., https://www.youtube.com/watch?v=...). Do not return articles, blogs, or channel homepages.`;
         
         const searchResponse = await ai.models.generateContent({
             model: "gemini-3.1-flash-lite-preview",
@@ -44,7 +44,7 @@ export async function runAutonomousScrape(query: string) {
                 responseSchema: SOURCE_LIST_SCHEMA,
                 // @ts-ignore
                 thinkingConfig: {
-                    thinkingLevel: "HIGH",
+                    thinkingLevel: "high",
                     includeThoughts: true
                 }
             }
@@ -54,47 +54,36 @@ export async function runAutonomousScrape(query: string) {
         const sources = searchData.sources || searchData.results || [];
 
         if (sources.length === 0) {
-            console.log("[AUTONOMOUS SCRAPE] No sources found.");
+            console.log("[AUTONOMOUS SCRAPE ⚠️] No sources found.");
             return { success: false, error: "No sources found" };
         }
 
-        console.log(`[AUTONOMOUS SCRAPE ✅] Found ${sources.length} sources.`);
-        console.log(`[AUTONOMOUS SCRAPE 🧠] Beginning Deep-Vision Multimodal Extraction Phase`);
+        console.log(`[AUTONOMOUS SCRAPE ✅] Found ${sources.length} YouTube sources.`);
 
-        // 2. Curate each source using the Multimodal Vision Pass
+        // 2. Curate each source
+        console.log(`[AUTONOMOUS SCRAPE 🧠] Beginning Extraction Phase`);
         const dataset = [];
         let count = 1;
+
         for (const source of sources) {
             console.log(`\n  [CURATING ${count}/${sources.length}] ${source.title}`);
             console.log(`  -> URL: ${source.url}`);
-            console.log(`  -> [GEMINI 3.1] Analyzing content and structuring Directorial DNA (this takes a minute)...`);
-            const curationPrompt = `Extract structured training data (instruction/response pairs, techniques, prompt_examples, principles, quality_assessment) for an AI Director's Assistant model.`;
+            console.log(`  -> [GEMINI 3.1] Analyzing transcript and structuring Directorial DNA...`);
+            
+            const curationPrompt = `Analyze this YouTube video: ${source.url}. 
+            Extract structured training data (instruction/response pairs, techniques, prompt_examples, principles, quality_assessment) for an AI Director's Assistant model.`;
             
             try {
-                // Determine if it's a YouTube URL to use the native video ingestion
-                const isYouTube = source.url.includes("youtube.com") || source.url.includes("youtu.be");
-                
-                const contentsPayload = isYouTube ? [
-                    {
-                        parts: [
-                            { 
-                                fileData: { 
-                                    fileUri: source.url, 
-                                    mimeType: "video/mp4" 
-                                } 
-                            },
-                            { text: `Watch this video. ${curationPrompt}` }
-                        ]
-                    }
-                ] : [
-                    { text: `Analyze the content at ${source.url}. ${curationPrompt}` }
-                ];
-
                 const curationResponse = await ai.models.generateContent({
                     model: "gemini-3.1-flash-lite-preview",
-                    contents: contentsPayload as any,
+                    // Pass as pure text, let the googleSearch tool fetch the video transcript/data
+                    contents: [{ text: curationPrompt }],
                     config: {
                         systemInstruction: SYSTEM_INSTRUCTION,
+                        tools: [{ googleSearch: {} }], // Allows the model to look up the video
+                        toolConfig: {
+                            includeServerSideToolInvocations: true
+                        },
                         responseMimeType: "application/json",
                         responseSchema: {
                             type: Type.OBJECT,
@@ -105,7 +94,7 @@ export async function runAutonomousScrape(query: string) {
                         },
                         // @ts-ignore
                         thinkingConfig: {
-                            thinkingLevel: "HIGH",
+                            thinkingLevel: "high",
                             includeThoughts: true
                         }
                     }
@@ -122,11 +111,14 @@ export async function runAutonomousScrape(query: string) {
                     date_watched: new Date().toISOString()
                 };
                 
+                const pairCount = finalData.training_pairs?.length || 0;
+                console.log(`  -> [SUCCESS] Extracted ${pairCount} training pairs from this source.`);
+                
                 dataset.push(finalData);
-                console.log(`  -> [SUCCESS] Extracted ${finalData.training_pairs?.length || 0} training pairs from this source.`);
             } catch (e) {
                 console.error(`  Error curating ${source.url}:`, e);
             }
+            count++;
         }
 
         if (dataset.length === 0) return { success: false, error: "No data curated" };
@@ -143,6 +135,7 @@ export async function runAutonomousScrape(query: string) {
         console.log(`\n[AUTONOMOUS SCRAPE 💾] ---------------------------------------------`);
         console.log(`[AUTONOMOUS SCRAPE 💾] Successfully saved ${dataset.length} extractions to disk!`);
         console.log(`[AUTONOMOUS SCRAPE 💾] The Mac has finished its job. The 5090 will detect this file shortly.`);
+        
         return { success: true, count: dataset.length };
     } catch (error) {
         console.error("[AUTONOMOUS SCRAPE] Error:", error);

@@ -106,18 +106,22 @@ def analyze_dataset_gaps():
         print(f"  Reflection failed: {e}")
         return ["advanced cinematography techniques", "film pacing and rhythm", "visual storytelling"]
 
-def clean_json_response(raw_text: str) -> str:
-    # Strip thought blocks if they exist
+def clean_json_response(raw_text):
+    # 1. Strip thought blocks if they exist
     if "<|thought|>" in raw_text:
-        # Some models output "done thinking.", some just close the tag with </thought>
-        if "done thinking." in raw_text:
-            raw_text = raw_text.split("done thinking.")[-1]
-        elif "</thought>" in raw_text:
-            raw_text = raw_text.split("</thought>")[-1]
-            
-    # Strip markdown code fences
-    cleaned = raw_text.replace("```json", "").replace("```", "").strip()
-    return cleaned
+        # Fallback split in case 'done thinking' isn't exact
+        raw_text = raw_text.split("</|thought|>")[-1] if "</|thought|>" in raw_text else raw_text.split("done thinking.")[-1]
+    
+    # 2. Aggressively hunt for the JSON boundaries
+    start_idx = raw_text.find('{')
+    end_idx = raw_text.rfind('}')
+    
+    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+        # Slice out ONLY the JSON object
+        return raw_text[start_idx:end_idx+1]
+    
+    # Fallback if no brackets found (highly unlikely with format='json')
+    return raw_text.replace("```json", "").replace("```", "").strip()
 
 def score_with_qwen(shot: ShotExtraction):
     payload = {
@@ -130,13 +134,20 @@ def score_with_qwen(shot: ShotExtraction):
     try:
         response = requests.post(OLLAMA_ENDPOINT, json=payload)
         response.raise_for_status()
-        result = response.json()["response"]
+        raw_result = response.json()["response"]
         
-        cleaned_result = clean_json_response(result)
-        return json.loads(cleaned_result)
+        cleaned_result = clean_json_response(raw_result)
+        
+        try:
+            return json.loads(cleaned_result)
+        except json.JSONDecodeError:
+            # THE X-RAY: If it crashes, print exactly what Qwen tried to say
+            print(f"    [DEBUG] Qwen Raw Output: {repr(raw_result)}")
+            return {"score": 0, "reason": "inference_failure"}
+            
     except Exception as e:
-        print(f"Qwen inference failed: {e}")
-        return {"score": 0, "reason": "inference_failure"}
+        print(f"    [ERROR] API Call Failed: {e}")
+        return {"score": 0, "reason": "api_failure"}
 
 def max_audit_rewrite(raw_json: str):
     """
@@ -228,14 +239,14 @@ def run_autonomous_loop():
                             if not prompts: continue
                                 
                             for p_index, p in enumerate(prompts):
-                                prompt_text = p.get("prompt_text", p) if isinstance(p, dict) else p
-                                if not prompt_text: continue
-                                    
+                                # Give Qwen the full rich dictionary, not just the text string
+                                full_context = json.dumps(p) if isinstance(p, dict) else str(p)
+                                
                                 shot_id = f"{filename}_{index}_{p_index}"
                                 shot = ShotExtraction(
                                     id=shot_id,
                                     prompt="Evaluate Aesthetic",
-                                    raw_output=str(prompt_text)
+                                    raw_output=full_context
                                 )
                                 
                                 print(f"    -> [INFERENCE] Sending shot {p_index} to Qwen on the 5090...", end=" ", flush=True)

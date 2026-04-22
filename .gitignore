@@ -7,12 +7,14 @@ firebase-blueprint.json
 # Dependencies
 node_modules/
 execution/venv/
+data/*
 
 # Build and Temp
 dist/
 .tmp/
 temp/
 migrated_prompt_history
+tmp/*
 
 # Python Cache
 __pycache__/
@@ -32,6 +34,7 @@ Thumbs.db
 
 # Project-specific
 GIT_*
+services/Training Data/*
 
 # Local environment files — never commit secrets
 .env
