@@ -29,7 +29,7 @@ export async function runAutonomousScrape(query: string) {
         Focus on AI video generation, filmmaking, cinematography, and prompt engineering.`;
         
         const searchResponse = await ai.models.generateContent({
-            model: "gemini-3.1-flash-lite",
+            model: "gemini-3.1-flash-lite-preview",
             contents: searchPrompt,
             config: {
                 tools: [{ googleSearch: {} }],
@@ -65,7 +65,7 @@ export async function runAutonomousScrape(query: string) {
             
             try {
                 const curationResponse = await ai.models.generateContent({
-                    model: "gemini-3.1-flash-lite",
+                    model: "gemini-3.1-flash-lite-preview",
                     contents: curationPrompt,
                     config: {
                         systemInstruction: SYSTEM_INSTRUCTION,
