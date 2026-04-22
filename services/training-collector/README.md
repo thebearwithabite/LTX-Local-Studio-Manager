@@ -17,6 +17,17 @@ This module is the "brain" of the autonomous studio, responsible for identifying
 3.  **Reflective Brain (`scraper_service.ts`)**:
     *   Uses **Gemini 3.1 Flash-Lite** to search and curate high-quality filmmaking techniques from YouTube and articles.
 
+## Hybrid Learning System
+
+The studio employs a dual-layered approach to learning and dataset coverage:
+
+1.  **Macro-Tracking (The React Dashboard):**
+    *   A static, deterministic quota system (e.g., 200 "Prompt Craft" examples, 100 "Camera Work" examples).
+    *   **Purpose:** Provides a visual health check of the dataset in the UI, ensuring all major categories are represented before fine-tuning begins.
+2.  **Micro-Discovery (The Python Loop):**
+    *   An LLM-driven reflection cycle inside `aesthetic_scorer.py` that reads the `clean_training_set.jsonl`.
+    *   **Purpose:** Discovers nuanced gaps *within* the macro categories (e.g., noticing the dataset lacks "dutch angles" despite hitting the generic "camera work" quota) and dispatches highly targeted search queries to the Scraper Service.
+
 ## System Workflow
 
 ```mermaid

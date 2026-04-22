@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import fs from "fs";
 import path from "path";
+import { CURATOR_SCHEMA, SOURCE_LIST_SCHEMA } from "../src/services/gemini";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
@@ -36,6 +37,7 @@ export async function runAutonomousScrape(query: string) {
                     includeServerSideToolInvocations: true
                 },
                 responseMimeType: "application/json",
+                responseSchema: SOURCE_LIST_SCHEMA,
                 // @ts-ignore
                 thinkingConfig: {
                     thinkingLevel: "high",
@@ -72,6 +74,13 @@ export async function runAutonomousScrape(query: string) {
                             includeServerSideToolInvocations: true
                         },
                         responseMimeType: "application/json",
+                        responseSchema: {
+                            type: Type.OBJECT,
+                            properties: {
+                                result: CURATOR_SCHEMA.properties.results.items
+                            },
+                            required: ["result"]
+                        },
                         // @ts-ignore
                         thinkingConfig: {
                             thinkingLevel: "high",
