@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import React, {useCallback, useRef, useState} from 'react';
+import React, {useCallback, useRef, useState, useEffect} from 'react';
 import {IngredientImage, ProjectAsset} from '../types';
 import {
   ArrowRightIcon,
@@ -59,6 +59,21 @@ const ProjectSetupForm: React.FC<ProjectSetupFormProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [createKeyframes, setCreateKeyframes] = useState(false); // Default to false for HIL
   const [isTranscribing, setIsTranscribing] = useState(false); // New state
+  const [scannedProjects, setScannedProjects] = useState<{name: string, path: string}[]>([]);
+  const [dbProjects, setDbProjects] = useState<any[]>([]);
+
+  // Fetch projects on mount
+  useEffect(() => {
+     fetch('http://127.0.0.1:8000/scan')
+       .then(res => res.json())
+       .then(data => setScannedProjects(data.projects || []))
+       .catch(err => console.error("Failed to fetch scanned projects:", err));
+
+     fetch('http://127.0.0.1:8000/projects')
+       .then(res => res.json())
+       .then(data => setDbProjects(data || []))
+       .catch(err => console.error("Failed to fetch db projects:", err));
+  }, []);
 
   const scriptFileInputRef = useRef<HTMLInputElement>(null);
   const projectFileInputRef = useRef<HTMLInputElement>(null);
@@ -199,12 +214,30 @@ const ProjectSetupForm: React.FC<ProjectSetupFormProps> = ({
               Step 1: The Script
             </label>
             <div className="flex flex-wrap gap-2">
+              <select 
+                className="bg-gray-700 text-white font-semibold rounded-lg px-3 py-1.5 text-sm outline-none cursor-pointer"
+                onChange={(e) => {
+                   const val = e.target.value;
+                   if (val) {
+                       // Trigger load from local DB logic (to be implemented in App.tsx)
+                       // onLoadProject(val); 
+                   }
+                }}
+              >
+                <option value="">Load local project...</option>
+                {scannedProjects.map((p, idx) => (
+                    <option key={`scan-${idx}`} value={p.path}>[FS] {p.name}</option>
+                ))}
+                {dbProjects.map((p, idx) => (
+                    <option key={`db-${p.id}`} value={p.id}>[DB] {p.name}</option>
+                ))}
+              </select>
               <button
                 type="button"
                 onClick={handleLoadProjectClick}
                 disabled={isGenerating || isTranscribing}
                 className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white font-semibold rounded-lg transition-colors text-sm disabled:bg-gray-700 disabled:cursor-not-allowed">
-                Load Project (.json)
+                Import JSON
               </button>
               <button
                 type="button"

@@ -24,6 +24,8 @@ const getAiClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 // --- SYSTEM PROMPTS ---
 const SYSTEM_PROMPT_SHOTLIST = `
 You are a Script Analysis Engine. Your task is to break down the provided creative input (script, treatment, or concept) into a sequence of discrete shots.
+You have been provided with visual assets (Characters, Locations, Styles). You MUST use "Visual Inference" to inform your analysis. 
+If a reference image shows a specific mood, lighting, or setting, ensure your shot pitches reflect that visual reality.
 For each shot, provide a unique 'shot_id' (e.g., 'ep1_scene1_shot1') and a concise, 1-2 sentence natural language 'pitch' describing the shot's action and mood.
 Your final output MUST be a single, valid JSON array of objects, where each object contains only the 'shot_id' and 'pitch' keys. Do not output any other text or explanation.
 `;
@@ -258,6 +260,19 @@ const cleanJsonOutput = (rawText: string): string => {
   return cleaned.trim();
 };
 
+// Helper to convert ProjectAsset to InlineData for Gemini
+const assetToInlineData = (asset: ProjectAsset) => {
+  if (!asset.image) return null;
+  return {
+    inlineData: {
+      data: asset.image.base64,
+      mimeType: asset.image.mimeType
+    }
+  };
+};
+
+// Simple JSON repair to handle truncated output
+
 // Simple JSON repair to handle truncated output
 const attemptJsonRepair = (jsonStr: string): string => {
   try {
@@ -425,26 +440,21 @@ export const extractAssetsFromScript = async (
 export const generateShotList = async (
   script: string,
   assets: ProjectAsset[] = []
-): Promise<GenerateResult<{ id: string; pitch: string }[]>> => {
+): Promise<GenerateResult<{id: string; pitch: string}[]>> => {
   const ai = getAiClient();
-  const contentParts: any[] = [{ text: script }];
-
-  // Add visuals from Asset Library for "Visual Inference" in shot listing
-  assets.forEach(asset => {
-    if (asset.image) {
-      contentParts.push({
-        inlineData: {
-          data: asset.image.base64,
-          mimeType: asset.image.mimeType
-        }
-      });
-      contentParts.push({ text: `Visual Reference [${asset.type}]: ${asset.name}` });
+  
+  const contentParts: any[] = [{ text: `SCRIPT:\n${script}` }];
+  assets.filter(a => a.image).forEach(asset => {
+    const data = assetToInlineData(asset);
+    if (data) {
+      contentParts.push({ text: `REFERENCE [${asset.type.toUpperCase()}]: ${asset.name}` });
+      contentParts.push(data);
     }
   });
 
   const response = await ai.models.generateContent({
     model: 'gemini-3.1-pro-preview',
-    contents: { parts: contentParts },
+    contents: contentParts,
     config: {
       systemInstruction: SYSTEM_PROMPT_SHOTLIST,
       responseMimeType: 'application/json',
@@ -588,12 +598,25 @@ export const generateVeoJson = async (
   id: string,
   fullScript: string,
   scenePlan: ScenePlan | null,
+  assets: ProjectAsset[] = []
 ): Promise<GenerateResult<VeoShotWrapper>> => {
   const ai = getAiClient();
-  const prompt = `SHOT ID: "${id}"\nPITCH: "${pitch}"\nSCENE PLAN:\n${JSON.stringify(scenePlan || {})}\nSCRIPT:\n${fullScript}`;
+  
+  const contentParts: any[] = [
+    { text: `SHOT ID: "${id}"\nPITCH: "${pitch}"\nSCENE PLAN:\n${JSON.stringify(scenePlan || {})}\nSCRIPT:\n${fullScript}` }
+  ];
+
+  assets.filter(a => a.image).forEach(asset => {
+    const data = assetToInlineData(asset);
+    if (data) {
+      contentParts.push({ text: `IMAGE REFERENCE - ${asset.type.toUpperCase()} - ${asset.name}` });
+      contentParts.push(data);
+    }
+  });
+
   const response = await ai.models.generateContent({
-    model: 'gemini-3.1-pro-preview',
-    contents: prompt,
+    model: 'gemini-3.1-pro-preview', 
+    contents: contentParts,
     config: {
       systemInstruction: SYSTEM_PROMPT_SINGLE_SHOT_JSON,
       responseMimeType: 'application/json',
