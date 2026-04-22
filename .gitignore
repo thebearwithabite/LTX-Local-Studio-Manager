@@ -5,3 +5,10 @@ GIT_*
 .env
 .env.local
 .env.*.local
+
+## Test Files
+test*_*
+test*
+
+## Config
+*.code-workspace

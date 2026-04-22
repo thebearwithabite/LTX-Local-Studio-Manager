@@ -1,0 +1,300 @@
+# LTX 2.4 Desktop — Production Skill
+
+## What This Is
+
+Local video generation via LTX Desktop's HTTP API. Primary tool for animating shots in *EMERGENCE: The Alignment Clinic*. Used for text-to-video and image-to-video generation at 512p–720p, 2–10 seconds per clip, 24fps.
+
+**Base URL:** `http://[IP_ADDRESS]`
+**Auth:** None unless `LTX_AUTH_TOKEN` is set, then `Authorization: Bearer <token>`
+
+## When to Use LTX
+
+| Shot Type | Use LTX? | Notes |
+|-----------|----------|-------|
+| City Breath atmospheric | **Yes — primary** | Fog, rooftops, buses. LTX excels at atmosphere and drift. No characters, no text. |
+| Clinic scenes (Ryan, Lena, Dan) | **Yes — with guidance frame** | Generate keyframe in Leonardo first, then I2V. Character consistency depends on the guidance frame. |
+| Laptop/terminal screen text | **No** | LTX cannot reliably render readable text. Composite text in post or use a static overlay. |
+| Session Space degradation | **Partial** | LTX can generate the base clip. Apply glitch/degradation in ComfyUI as a second pass. |
+| Mythology layer (Bear/Gem) | **No** | Stop-motion clay texture needs ComfyUI procedural control. LTX will smooth it into generic animation. |
+| Clinic log text cards | **No** | Static text on black. Render as image or motion graphic. |
+| Rilke (dog reactions) | **Yes — with guidance frame** | I2V from a Leonardo keyframe. Prompt only the motion: settling, lifting head, ears shifting. |
+
+## API Quick Reference
+
+### Generate Video
+```
+POST /api/generate
+```
+```json
+{
+  "prompt": "flowing paragraph, present tense, cinematic language",
+  "resolution": "512p",
+  "duration": "3",
+  "fps": "24",
+  "cameraMotion": "none",
+  "aspectRatio": "16:9",
+  "imagePath": "/path/on/host/keyframe.png",
+  "negativePrompt": ""
+}
+```
+
+Generation is async. Poll `/api/generation/progress` every 1.5s until `status == "complete"`.
+
+Only one generation runs at a time. Cancel with `POST /api/generate/cancel` before submitting a new one.
+
+### Camera Motions
+`none` · `static` · `focus_shift` · `dolly_in` · `dolly_out` · `dolly_left` · `dolly_right` · `jib_up` · `jib_down`
+
+For this show, prefer `none` or `static` for clinic interiors. Use `dolly_in` sparingly for emotional compression moments (the crack, the return). City Breath shots can use slow `dolly_left` or `dolly_right` for lateral drift.
+
+### Generate Image (for quick tests)
+```
+POST /api/image-gen
+```
+```json
+{
+  "prompt": "...",
+  "width": 1024,
+  "height": 576,
+  "numSteps": 4,
+  "numImages": 1
+}
+```
+
+### IC-LoRA (Structure Conditioning)
+Extract structure from existing video:
+```
+POST /api/ic-lora/extract
+{ "video_path": "...", "conditioning_type": "canny", "frame_time": 0.0 }
+```
+Generate with structure constraint:
+```
+POST /api/ic-lora/generate
+{
+  "video_path": "...",
+  "conditioning_type": "canny",
+  "prompt": "...",
+  "conditioning_strength": 1.0
+}
+```
+Use `canny` for preserving composition (e.g., re-rendering a clinic shot with different lighting). Use `depth` for preserving spatial layout while changing surface detail (e.g., the fence dissolve transition).
+
+### Retake (Segment Replacement)
+```
+POST /api/retake
+{
+  "video_path": "...",
+  "start_time": 2.0,
+  "duration": 1.5,
+  "prompt": "...",
+  "mode": "replace_audio_and_video"
+}
+```
+Useful for fixing a specific moment within an otherwise good clip — e.g., Rilke's head movement lands wrong at second 3, retake just that beat.
+
+## Output Location
+
+Videos save to `%LOCALAPPDATA%\LTXDesktop\outputs\` on the Windows host. Files need to be transferred via Tailscale, SMB, or manual copy for review.
+
+---
+
+## Prompting Craft for This Show
+
+### Core Rules
+
+LTX wants a **single flowing paragraph in present tense**. Not structured specs. Not bullet points. Not JSON. Write it like you're describing the shot to a cinematographer who's about to roll.
+
+**Match prompt length to duration.** A 2-second clip can survive a 2-sentence prompt. A 8-second clip needs 6–8 sentences minimum or the model will rush through the action and fill dead time with drift.
+
+**Use physical cues, not emotional labels.** Not "she looks sad" — instead "her shoulders drop slightly, her gaze falls to the table surface, her fingers stop moving on the keyboard." LTX translates physical descriptions into motion. Emotional labels get interpreted inconsistently.
+
+**Describe audio when generating with audio enabled.** Ambient room tone, the quality of silence, distant traffic, the hum of a laptop fan. Audio descriptions anchor the temporal feel of the clip.
+
+### Image-to-Video Prompting
+
+When using a guidance frame (keyframe from Leonardo), the rules change:
+
+- **Do not describe what's already visible in the image.** The model sees it.
+- **Describe only what happens next.** Motion, change, temporal arc.
+- **Focus on active verbs.** "Camera drifts slowly right as fog rolls across the rooftop. A distant foghorn sounds. The light shifts imperceptibly cooler."
+- **Describe chronological changes** when the shot has an internal arc. "Begins still and quiet, then a slight breeze moves the curtain in the window."
+
+### Negative Prompts
+
+Keep negative prompts minimal and specific. For this show:
+
+**ALWAYS include in every audio-enabled generation:**
+`no music, no soundtrack, no score, no background music, no composed music`
+
+LTX aggressively adds generic ambient music tracks when audio is enabled. Music for this show is composed and added in DaVinci Resolve / Fairlight in post. Only diegetic and ambient sound (room tone, traffic, wind, foghorn, refrigerator hum, footsteps) should come from LTX.
+
+**Default negative for clinic scenes:**
+`smooth plastic skin, oversaturated colors, lens flare, sci-fi interface, holographic display, clean modern aesthetic, stock footage look, no music, no soundtrack`
+
+**Default negative for City Breath:**
+`people, pedestrians, sharp focus, vibrant colors, clear sky, tourist photography, HDR look, 16mm, vintage, retro, no music, no soundtrack`
+
+**Default negative for character close-ups:**
+`perfect skin, symmetrical features, fashion photography, studio lighting, airbrushed, glamour, no music, no soundtrack`
+
+---
+
+## Shot-Type Prompt Patterns
+
+### City Breath (Atmospheric)
+
+These are the emotional punctuation of the episode. No characters. No narrative. Just the city breathing.
+
+**Pattern:**
+```
+[Film texture]. [Wide/surveillance framing]. [Specific San Francisco geography].
+[Fog behavior — how it moves, what it obscures, what it reveals].
+[Light quality — pre-dawn, golden hour, dusk, sodium vapor].
+[One subtle environmental detail — a wire, a rooftop antenna, a parked car].
+[Sound environment if audio enabled].
+[Camera behavior — static, slow drift, barely perceptible movement].
+```
+
+**Example — City Breath #1 (Cold Open):**
+```
+16mm film grain texture, muted desaturated palette. A wide static shot of San Francisco
+rooftops at pre-dawn, framed like surveillance footage — slightly too distant, slightly too
+still. Thick fog rolls slowly from left to right, half-dissolving the rooflines of Bernal
+Heights. The light is flat and blue-grey, not yet warm. A single rooftop antenna is barely
+visible through the haze. The fog moves with weight, not wispy but heavy and deliberate.
+The camera is completely still. Faint ambient city hum beneath deep quiet.
+```
+
+**Settings:** `duration: "5"`, `cameraMotion: "static"` or `"none"`, `resolution: "512p"`, no guidance frame needed.
+
+### Clinic Interior (Character Scenes)
+
+These are the dramatic core. Always use a Leonardo guidance frame for character consistency. Prompt describes only the motion and temporal arc.
+
+**Pattern (I2V):**
+```
+[Camera behavior — handheld micro-jitter, shallow focus].
+[Primary character action — physical, specific, small].
+[Secondary elements — light shift, background detail, dog movement].
+[Timing cues — "after a beat," "slowly," "barely perceptible"].
+[Ambient sound if audio enabled].
+```
+
+**Example — Ryan at Kitchen Table (I2V from guidance frame):**
+```
+Handheld camera with gentle micro-jitter and shallow depth of field. The man shifts his
+weight slightly in the chair, his fingers resting on the edge of an open laptop. Morning
+fog diffuses through the large window behind him, the light cool and flat. After a beat,
+he lifts his coffee mug without looking at it, takes a sip, sets it down. The movement is
+absent-minded, automatic. On the couch in the background, the Australian Shepherd adjusts
+its position and settles. Faint room tone and the distant sound of a foghorn.
+```
+
+**Settings:** `duration: "5"` to `"8"`, `cameraMotion: "none"` (the handheld is described in the prompt, not forced by the parameter), `imagePath: "/path/to/ryan-kitchen-keyframe.png"`
+
+### Lena's Intake / Dialogue Scenes
+
+Dialogue scenes are the hardest. LTX 2.3+ handles speech but requires careful pacing.
+
+**Rules for dialogue:**
+- Break speech into short phrases with physical direction between each line.
+- Describe delivery: vocal fry, pace, volume, interruptions.
+- Include pauses explicitly. "She stops mid-sentence. A beat of silence."
+- Keep dialogue to 2–3 short phrases per clip maximum. Longer exchanges need multiple clips stitched.
+
+**Example — Lena Explaining the Problem (I2V):**
+```
+Cinematic realism with 16mm film grain. The young woman sits at the kitchen table, her
+hands moving as she talks, gestures slightly too large for the space. She speaks with
+nervous energy and vocal fry, "It just keeps apologizing." She pauses, looks down at the
+table, then back up. "Like, for everything. I ask it to summarize a paper and it starts
+with 'I'm sorry if this isn't what you—'" She cuts herself off, waves her hand dismissively.
+The camera holds steady on a medium shot with shallow focus. Room tone and the faint hum
+of a refrigerator.
+```
+
+**Settings:** `duration: "8"`, `audio: "true"`, `imagePath: "/path/to/lena-at-table.png"`
+
+### The Crack / Emotional Peaks
+
+These are the restrained moments of recognition. The show's emotional architecture demands withholding — the peak is quiet, not loud.
+
+**Key craft note:** Do not over-direct emotion. Describe physical stillness, small involuntary movements, changes in breathing. Let the model find the performance in the negative space.
+
+**Example — Lena's Recognition (I2V):**
+```
+16mm film grain, shallow depth of field. The young woman is very still. Her hands have
+stopped moving. She stares at the laptop screen, not blinking. The camera holds on a
+medium close-up, completely still — no handheld jitter in this moment. The kitchen light
+has shifted slightly warmer. After a long beat, she inhales, a small sharp breath. Her
+jaw tightens almost imperceptibly. She does not speak. The Australian Shepherd on the
+couch lifts its head, watching her. Silence except for room tone.
+```
+
+**Settings:** `duration: "6"`, `cameraMotion: "static"`, `audio: "false"` (silence is the audio design here — add room tone in post)
+
+---
+
+## What LTX Does Well (for this show)
+
+- Atmospheric footage with fog, light, and environmental drift
+- Subtle character motion from good guidance frames — micro-gestures, shifts in weight, breathing
+- Cinematic camera language — shallow DOF, film grain texture, naturalistic lighting
+- Pacing and stillness — it can hold a shot without inventing unnecessary motion
+- Audio ambience — room tone, city sounds, environmental texture
+
+## What LTX Does Poorly (avoid or work around)
+
+| Problem | Workaround |
+|---------|------------|
+| Readable text on screen | Composite text in post. Never rely on LTX to render the clinic log cards, terminal text, or any UI. |
+| Character consistency across shots | Use Leonardo keyframes as guidance frames. Same seed + same prompt ≠ same character. |
+| Complex multi-character choreography | Keep to one primary character per clip. Cut between angles rather than staging two people in motion simultaneously. |
+| Stop-motion or clay texture | Will smooth into generic animation. Use ComfyUI for the mythology layer. |
+| Sharp transitions or cuts within a single generation | LTX generates continuous motion. Hard cuts need to happen in editing, not in the prompt. |
+| Very long holds (>8s of near-stillness) | Model tends to invent motion to fill time. Generate shorter clips and loop/extend in post. |
+| Specific hand gestures or finger positions | Hands remain a weak point. Frame around them — medium shots hide hand artifacts. |
+
+## Duration Guidance for Scene Types
+
+| Scene Type | Recommended Duration | Why |
+|------------|---------------------|-----|
+| City Breath | 3–5s | Short atmospheric holds. Extend in post if needed. Longer gens drift. |
+| Kitchen ambient (no dialogue) | 5–8s | Enough for a single beat of character behavior. |
+| Dialogue beat | 5–8s | One exchange per clip. Break longer dialogue across multiple gens. |
+| Emotional peak / silence | 4–6s | Restraint. Don't let the model fill silence with invented action. |
+| Transition / interstitial | 2–3s | Bus, fog, hallway. Quick punctuation. |
+
+---
+
+## Iteration Workflow
+
+The expected workflow when working shots in conversation:
+
+1. **Identify the shot** from the scene plan / shot breakdown.
+2. **Decide: T2V or I2V?** If the shot has a character, it's almost always I2V with a Leonardo keyframe. If it's atmospheric or environmental, T2V is fine.
+3. **Write the prompt** following the patterns above, native to LTX natural language.
+4. **Choose settings** — duration, camera motion, resolution, audio on/off.
+5. **Generate** via API call.
+6. **Review** — discuss what worked, what didn't.
+7. **Iterate** — adjust prompt, try different guidance frame, change duration, retake a segment.
+8. **Lock** — mark the shot as approved in the shot breakdown.
+
+For shots that need post-processing (text overlay, glitch effects, color grading), note the pipeline: LTX generates the base clip → ComfyUI applies effects → final clip goes to the edit timeline.
+
+---
+
+## Connection & Troubleshooting
+
+Before generating, always check server health:
+```
+GET /api/health
+```
+Verify `models_loaded: true` and note `active_model`. If models aren't loaded, wait — the server is still initializing.
+
+The server port (`65241`) is assigned at startup. If LTX Desktop restarts, the port may change — check the app's logs.
+
+Only one generation runs at a time. If a previous gen is stuck, cancel it before submitting:
+```
+POST /api/generate/cancel
+```

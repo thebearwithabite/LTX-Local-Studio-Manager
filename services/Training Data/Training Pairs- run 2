@@ -1,0 +1,328 @@
+[
+  {
+    "source": {
+      "title": "ComfyUI Advanced Video Generation 01 - LTX 2.3",
+      "channel": "AI Told",
+      "url": "[http://www.youtube.com/watch?v=Ut71c1CCUUk](http://www.youtube.com/watch?v=Ut71c1CCUUk)",
+      "date_watched": "2026-03-28",
+      "relevance_tags": [
+        "model_specific",
+        "workflow",
+        "cinematography",
+        "prompt_engineering"
+      ]
+    },
+    "techniques": [
+      {
+        "name": "Frame Calculation Math",
+        "category": "model_config",
+        "description": "Calculating the exact frame count based on desired duration and FPS using the formula (FPS * Seconds) + 1.",
+        "when_to_use": "Use this to ensure the video length perfectly matches your intended timeline and prevents the model from cutting off early or looping awkwardly.",
+        "example_prompt": "For a 10-second clip at 24 FPS, set length to 241 frames.",
+        "anti_pattern": "Guessing frame counts or using round numbers like 240, which can lead to missing the final keyframe of a motion.",
+        "model_specific": "LTX 2.3"
+      },
+      {
+        "name": "Latent Upscale Mitigation",
+        "category": "workflow",
+        "description": "Manually upscaling the latent space by 2x and interpolating it with the model's internal upscale to preserve texture.",
+        "when_to_use": "Apply when the default 1080p output looks 'flat' or loses fine details/noise from the low-res first pass.",
+        "example_prompt": "N/A (Node-based technique)",
+        "anti_pattern": "Relying solely on the model's 1-step latent upscale which can 'rip off' details like a GAN model.",
+        "model_specific": "LTX 2.3"
+      },
+      {
+        "name": "Distilled LoRA Pairing",
+        "category": "model_config",
+        "description": "Using a Dev-tier model paired with a specific distilled LoRA to achieve high-quality results at faster speeds.",
+        "when_to_use": "When you need professional-grade realism and 1080p resolution without the multi-hour render times of full non-distilled models.",
+        "example_prompt": "N/A",
+        "anti_pattern": "Using a distilled model without its corresponding LoRA, leading to flat lighting and reduced prompt adherence.",
+        "model_specific": "LTX 2.3"
+      }
+    ],
+    "prompt_examples": [
+      {
+        "prompt_text": "Cinematic shot of a high-end sports car driving through a mountain pass at sunset, 1080p, highly detailed, realistic lighting.",
+        "context": "Testing the model's ability to handle high-speed motion and environmental lighting.",
+        "result_quality": "Mixed",
+        "improvement_notes": "The creator noted that while the car looked good, the wheels were not spinning correctly; suggested better physics descriptions in the prompt."
+      }
+    ],
+    "principles": [
+      {
+        "principle": "Two-Pass Latent Generation",
+        "reasoning": "Generating at low resolution first allows for faster motion coherence before upscaling to 1080p for detail.",
+        "qa_pair": {
+          "question": "How can I generate 1080p video without running out of VRAM on a consumer GPU?",
+          "answer": "Utilize a two-pass workflow where the model generates a low-resolution latent first, then performs a 2x latent upscale to reach 1080p."
+        }
+      }
+    ],
+    "workflow_steps": [
+      {
+        "step": 1,
+        "action": "Load Diffusion Model (KJ's FP8)",
+        "tool_or_node": "ComfyUI / Diffusion Model Loader",
+        "parameter_notes": "Use FP8 for 16GB VRAM GPUs to prevent out-of-memory errors."
+      },
+      {
+        "step": 2,
+        "action": "Apply Sage Attention",
+        "tool_or_node": "SageAttention Node",
+        "parameter_notes": "Enable for increased generation speed on supported hardware."
+      },
+      {
+        "step": 3,
+        "action": "Set FPS and Frame Length",
+        "tool_or_node": "Video Linear Sampler",
+        "parameter_notes": "FPS: 24, Length: (Desired Sec * 24) + 1"
+      }
+    ],
+    "training_pairs": [
+      {
+        "instruction": "I need a 5-second cinematic clip at 24 frames per second. How should I configure the sampler?",
+        "response": "For a 5-second clip at 24 FPS, you should set your frame length to 121. This follows the formula (FPS * Duration) + 1 to ensure a complete sequence."
+      },
+      {
+        "instruction": "The 1080p output looks a bit flat and lacks the detail I saw in the low-res preview. What's wrong?",
+        "response": "This is likely due to the 1-step latent upscale model stripping away detail. To fix this, we should manually upscale the first-pass latent by 2x and interpolate it with the upscaler output to maintain texture and noise."
+      },
+      {
+        "instruction": "I'm getting 'out of memory' errors trying to run LTX 2.3 on my local machine. Any tips?",
+        "response": "Switch to an FP8 version of the model and ensure you are using VRAM management nodes like Sage Attention or KJ's memory management setups. Alternatively, consider a cloud-based ComfyUI instance with high VRAM (e.g., 94GB) for 1080p tasks."
+      }
+    ]
+  },
+  {
+    "source": {
+      "title": "Unlocking 4K on 12GB VRAM: The ultimate guide to generating 4K Video using LTX in ComfyUI",
+      "channel": "AI Told",
+      "url": "[http://www.youtube.com/watch?v=C1v-T_YwO7c](http://www.youtube.com/watch?v=C1v-T_YwO7c)",
+      "date_watched": "2026-03-28",
+      "relevance_tags": [
+        "model_specific",
+        "workflow",
+        "upscaling",
+        "vram_management"
+      ]
+    },
+    "techniques": [
+      {
+        "name": "Four-Pass Latent Upscaling",
+        "category": "workflow",
+        "description": "A multi-stage upscaling process to achieve 4K resolution while managing VRAM limitations.",
+        "when_to_use": "Use this when generating 4K video on consumer GPUs (12GB VRAM or less).",
+        "example_prompt": "N/A (Process-based technique)",
+        "anti_pattern": "Trying to generate 4K video in a single pass, which will likely result in an out-of-memory error on 12GB cards.",
+        "model_specific": "LTX Models"
+      },
+      {
+        "name": "VRAM Optimization Strategy",
+        "category": "model_config",
+        "description": "A specific configuration of LTX (e.g., 1.1 or 1.2) optimized for VRAM efficiency on consumer hardware.",
+        "when_to_use": "Essential for running high-resolution video generation on 12GB VRAM cards.",
+        "example_prompt": "N/A",
+        "anti_pattern": "Using a 4K-optimized 21B model on a 12GB card, which will cause it to crash.",
+        "model_specific": "LTX 1.1/1.2 (12GB VRAM Optimized)"
+      }
+    ],
+    "prompt_examples": [
+      {
+        "prompt_text": "Cinematic shot of a futuristic city skyline at night, neon lights, rain falling, 4K resolution, 24fps.",
+        "context": "Testing the 4K generation capability of the optimized LTX model.",
+        "result_quality": "High quality, detailed 4K footage.",
+        "improvement_notes": "The model must be explicitly configured for 4K generation; a generic setup may default to 1080p."
+      }
+    ],
+    "principles": [
+      {
+        "principle": "Progressive Upscaling",
+        "reasoning": "4K video is too large for 12GB VRAM to handle in one go. The solution is to generate the core motion at a lower resolution and then progressively upscale through multiple stages.",
+        "qa_pair": {
+          "question": "How can I generate 4K video on a 12GB graphics card?",
+          "answer": "Use a multi-pass latent upscaling workflow. Generate the video at a lower resolution (e.g., 640x480), then perform a 2x upscale, followed by a 1.5x upscale, and finally a 1.2x upscale to reach 4K."
+        }
+      }
+    ],
+    "workflow_steps": [
+      {
+        "step": 1,
+        "action": "Select Optimized LTX Model",
+        "tool_or_node": "ComfyUI",
+        "parameter_notes": "Use LTX 1.1 or 1.2 (FP8/FP4 recommended) as these are optimized for consumer VRAM."
+      },
+      {
+        "step": 2,
+        "action": "Set Base Resolution",
+        "tool_or_node": "KSampler",
+        "parameter_notes": "Start with a lower resolution, e.g., 640x360."
+      },
+      {
+        "step": 3,
+        "action": "Generate Motion",
+        "tool_or_node": "KSampler",
+        "parameter_notes": "Generate the core video frames. This is the most VRAM-intensive step."
+      },
+      {
+        "step": 4,
+        "action": "Perform 2x Upscale",
+        "tool_or_node": "LatentUpscale / RIFE",
+        "parameter_notes": "Upscale the latent space by 2x. Use RIFE for motion interpolation."
+      },
+      {
+        "step": 5,
+        "action": "Perform 1.5x Upscale",
+        "tool_or_node": "LatentUpscale",
+        "parameter_notes": "Upscale again by 1.5x."
+      },
+      {
+        "step": 6,
+        "action": "Perform Final 1.2x Upscale",
+        "tool_or_node": "LatentUpscale",
+        "parameter_notes": "Final upscale to reach 4K."
+      }
+    ],
+    "training_pairs": [
+      {
+        "instruction": "I want to generate 4K video on my 12GB VRAM card. What's the first thing I need to do?",
+        "response": "You need to use a model specifically optimized for consumer VRAM, like LTX 1.1 or 1.2. You cannot run the standard 4K 21B model on 12GB cards."
+      },
+      {
+        "instruction": "My 4K video generation keeps crashing with 'out of memory'. How do I fix it?",
+        "response": "Instead of generating at 4K directly, use a multi-pass workflow. Start with a lower resolution like 640x360, generate your motion, and then use progressive upscaling passes (e.g., 2x, 1.5x, 1.2x) to reach 4K."
+      },
+      {
+        "instruction": "What's the difference between generating at 1080p vs 4K with these LTX models?",
+        "response": "At 1080p, you can often use a standard 1-step latent upscale. At 4K, you must use a multi-stage process to manage VRAM, which involves generating at a lower resolution first and then upscaling through several intermediate steps."
+      }
+    ]
+  },
+  {
+    "source": {
+      "title": "Hands-On: Generate 1080p Video using LTX 2.3 in ComfyUI",
+      "channel": "AI Told",
+      "url": "[http://www.youtube.com/watch?v=x4H5W0-6YmI](http://www.youtube.com/watch?v=x4H5W0-6YmI)",
+      "date_watched": "2026-03-28",
+      "relevance_tags": [
+        "model_specific",
+        "workflow",
+        "motion_analysis",
+        "video_generation"
+      ]
+    },
+    "techniques": [
+      {
+        "name": "Reference Image Motion-to-Video",
+        "category": "workflow",
+        "description": "Converting a static reference image into a video by guiding the motion using only the first few frames as input.",
+        "when_to_use": "When you have a strong character pose in a reference image and want the AI to animate the character without inheriting the static quality of the image.",
+        "example_prompt": "N/A (Process-based technique)",
+        "anti_pattern": "Feeding the full reference image with a long prompt, which causes the model to heavily rely on the static image details and results in very little motion.",
+        "model_specific": "LTX 2.3"
+      },
+      {
+        "name": "Prompt-Driven Motion Engineering",
+        "category": "prompt_engineering",
+        "description": "Crafting prompts that explicitly describe the desired motion, camera movement, and character actions to guide the animation.",
+        "when_to_use": "Essential for LTX 2.3, which relies heavily on detailed motion prompts to generate coherent movement.",
+        "example_prompt": "Full cinematic shot of a motorcycle chase, camera swoops and dives along the pavement, motorcycle banks tightly into the turn, engine roaring, 24fps, 1080p.",
+        "anti_pattern": "Using generic or vague prompts, or descriptions that focus too much on aesthetics without describing motion.",
+        "model_specific": "LTX 2.3"
+      },
+      {
+        "name": "Negative Prompting for Stability",
+        "category": "prompt_engineering",
+        "description": "Using negative prompts to prevent unwanted elements like camera shake, AI artifacts, or incorrect physics.",
+        "when_to_use": "Crucial for high-motion shots like motorcycle chases to maintain stability.",
+        "example_prompt": "N/A (Negative prompt only)",
+        "anti_pattern": "Forgetting to add a negative prompt, which can lead to shaky footage, especially in fast-paced action scenes.",
+        "model_specific": "LTX 2.3"
+      }
+    ],
+    "prompt_examples": [
+      {
+        "prompt_text": "Full cinematic shot of a motorcycle chase, camera swoops and dives along the pavement, motorcycle banks tightly into the turn, engine roaring, 24fps, 1080p.",
+        "context": "Generating a high-action motorcycle chase scene with smooth camera movement.",
+        "result_quality": "High quality, cinematic footage with smooth motion and dynamic camera work.",
+        "improvement_notes": "The creator emphasizes the need for very specific camera motion descriptions ('camera swoops and dives along the pavement') to achieve the desired result."
+      },
+      {
+        "prompt_text": "Slow pan across a tranquil lake at dawn, gentle mist rising from the water, no people, no boats, no animals, cinematic lighting.",
+        "context": "Generating a calm, atmospheric landscape shot.",
+        "result_quality": "High quality, stable landscape footage.",
+        "improvement_notes": "The anti-pattern for this type of shot is using a prompt that implies motion (e.g., 'a boat moves across the lake') without explicitly describing it, which can lead to the AI freezing."
+      }
+    ],
+    "principles": [
+      {
+        "principle": "Motion-First Approach",
+        "reasoning": "LTX 2.3 is a motion-first model. The motion is determined primarily by the prompt, not the reference image. The reference image serves to establish the character's appearance and initial state.",
+        "qa_pair": {
+          "question": "Should I describe the motion in the prompt or just rely on the reference image to guide it?",
+          "answer": "Always describe the motion in the prompt. LTX 2.3 generates motion based on the text prompt and uses the reference image primarily for character consistency."
+        }
+      },
+      {
+        "principle": "Specific Camera Language",
+        "reasoning": "Generic camera terms like 'camera moves' or 'camera pans' are insufficient. You must describe the specific path and behavior of the camera (e.g., 'camera swoops and dives along the pavement') to achieve dynamic movement.",
+        "qa_pair": {
+          "question": "Is 'camera pans' enough for camera movement?",
+          "answer": "No. You need to be very specific, such as 'camera pans smoothly from left to right' or 'camera swoops down from above'."
+        }
+      }
+    ],
+    "workflow_steps": [
+      {
+        "step": 1,
+        "action": "Select Reference Image",
+        "tool_or_node": "Image Editor / Leonardo",
+        "parameter_notes": "Choose a clear, well-lit image that represents the character or scene at the starting moment."
+      },
+      {
+        "step": 2,
+        "action": "Craft Detailed Motion Prompt",
+        "tool_or_node": "ComfyUI / Text Input",
+        "parameter_notes": "Write a flowing paragraph describing the camera movement, character actions, and desired physics. Be specific and use active verbs."
+      },
+      {
+        "step": 3,
+        "action": "Set Up Negative Prompt",
+        "tool_or_node": "ComfyUI / Text Input",
+        "parameter_notes": "Include terms like 'camera shake', 'artifacts', 'AI glitches' if generating action scenes."
+      },
+      {
+        "step": 4,
+        "action": "Configure Sampler Settings",
+        "tool_or_node": "KSampler",
+        "parameter_notes": "Set resolution (e.g., 1080p), FPS (e.g., 24), and ensure the frame length matches your desired duration (Frames = FPS * Seconds + 1)."
+      },
+      {
+        "step": 5,
+        "action": "Load Reference Image into Model",
+        "tool_or_node": "LTX 2.3 Node",
+        "parameter_notes": "Load the reference image and set 'guidance_strength' appropriately (often high for character preservation)."
+      },
+      {
+        "step": 6,
+        "action": "Generate Video",
+        "tool_or_node": "KSampler / VFB",
+        "parameter_notes": "Generate and review the video. Be prepared to iterate on the prompt if the motion isn't as expected."
+      }
+    ],
+    "training_pairs": [
+      {
+        "instruction": "I have a great character pose in an image, but the video looks like a still frame. What's wrong?",
+        "response": "You likely need to improve your motion prompt. LTX 2.3 relies heavily on the text prompt to generate motion. The reference image primarily establishes the character's appearance; you must describe the desired movement explicitly in the prompt."
+      },
+      {
+        "instruction": "My motorcycle chase footage is too shaky and glitchy. How do I fix it?",
+        "response": "Use specific negative prompts to counteract camera shake and artifacts, such as 'camera shake, AI glitches, instability'. Also, ensure your prompt describes the camera motion in detail, as this helps guide the model into a more stable motion pattern."
+      },
+      {
+        "instruction": "What's the difference between a 'pan' and a 'swoop' in the prompt?",
+        "response": "'Pan' implies a standard side-to-side movement. 'Swoop' implies a more dynamic, often curved or diagonal movement, usually with a sense of speed or drama. For example, 'camera swoops and dives along the pavement' suggests a much more dynamic shot than a simple pan."
+      }
+    ]
+  }
+]

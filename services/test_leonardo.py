@@ -1,8 +1,12 @@
 import requests
 import json
 from pprint import pprint
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-API_KEY = "c138385f-1927-40d5-bf82-fc7373eac7b4"
+API_KEY = os.getenv("LEONARDO_API_KEY")
+
 HEADERS = {"accept": "application/json", "content-type": "application/json", "authorization": "Bearer " + API_KEY}
 
 def test_v2(model, style, quantity):

@@ -6,7 +6,10 @@ import urllib.error
 import mimetypes
 import uuid
 
-API_KEY = os.environ.get("LEONARDO_API_KEY", "c138385f-1927-40d5-bf82-fc7373eac7b4")
+from dotenv import load_dotenv
+load_dotenv()
+
+API_KEY = "LEONARDO_API_KEY"
 
 HEADERS = {
     "accept": "application/json",

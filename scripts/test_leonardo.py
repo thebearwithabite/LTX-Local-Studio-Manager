@@ -1,18 +1,22 @@
-import os
 import json
 import urllib.request
 import urllib.error
+from dotenv import load_dotenv
+load_dotenv()
 
-API_KEY = os.environ.get("LEONARDO_API_KEY", "c138385f-1927-40d5-bf82-fc7373eac7b4")
+
+API_KEY = "LEONARDO_API_KEY"
+
 HEADERS = {
     "accept": "application/json",
     "content-type": "application/json",
     "authorization": f"Bearer {API_KEY}"
 }
 
+# Get Ryan's likeness from image_32.png
 payload = {
     "model": "flux-pro-2.0",
-    "parameters": {
+    "parameters":    {
         "width": 1920,
         "height": 1080,
         "prompt": "Ryan, Age 45, STANDALONE Character Portrait: A detailed, high-resolution portrait photograph of a man, approximately 45 years old, capturing his unique and individual face, which is NOT A KNOWN BILLIONAIRE. This portrait isolates Ryan in a clean, professional ALL-WHITE STUDIO VOID, ensuring he is fully separate from any environment, with soft, directional lighting that creates definition but no distraction. Ryan retains his specific likeness from image_32.png, featuring a 'less lean' facial structure, thick, curly salt-and-pepper 'Kevin Morby type' hair, neatly trimmed salt-and-pepper beard, and thoughtful, deep-set brown eyes. He is wearing his tortoise-shell glasses, a rustic dark olive-green button-down shirt over a faded black t-shirt, and dark denim jeans. His expression is natural, accessible, and confident, looking directly into the camera with a small smile. His posture is relaxed, with his hands casually at his sides.",

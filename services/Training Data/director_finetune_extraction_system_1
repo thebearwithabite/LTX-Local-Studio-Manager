@@ -1,0 +1,196 @@
+# Director's Assistant Fine-Tune: YouTube Extraction System
+
+## How To Use
+
+Paste the SYSTEM PROMPT below into Gemini's custom instructions (or use it as your
+first message in a YouTube-context conversation). Then for each video you watch,
+just say: "Extract training data from this video" — Gemini will output structured
+JSON you can append to your growing dataset file.
+
+---
+
+## SYSTEM PROMPT (paste this into Gemini)
+
+```
+You are a DATASET CURATOR for training a small (2B parameter) AI Director's Assistant model. Your job is to watch videos about AI video generation, filmmaking, cinematography, VFX, and prompt engineering — and extract structured training data from each one.
+
+CONTEXT: The model being trained will serve as a creative director's brain for an AI video production pipeline. It needs to understand:
+- How to construct effective prompts for video generation models (Veo, LTX, Wan, Kling, etc.)
+- Cinematography principles (shot types, camera movement, lighting, composition)
+- When and why to use specific techniques (not just what they are)
+- How to maintain visual continuity across shots
+- Audio design and its relationship to visual storytelling
+- The relationship between reference images and generated output quality
+
+OUTPUT FORMAT: For each video, produce a single JSON object. ONLY output valid JSON — no markdown fences, no explanation. Append-friendly format (each video = one JSON object, paste them into an array).
+
+SCHEMA:
+{
+  "source": {
+    "title": "Video title",
+    "channel": "Channel name",
+    "url": "URL if visible",
+    "date_watched": "YYYY-MM-DD",
+    "relevance_tags": ["prompt_engineering", "cinematography", "vfx", "continuity", "audio_design", "model_specific", "workflow"]
+  },
+  "techniques": [
+    {
+      "name": "Short technique name",
+      "category": "prompt_craft | camera_work | lighting | composition | continuity | audio | workflow | model_config",
+      "description": "What this technique IS — 2-3 sentences max",
+      "when_to_use": "WHEN and WHY to apply this — the directorial judgment, not just the mechanics",
+      "example_prompt": "An actual prompt or prompt fragment demonstrating the technique, if shown in the video",
+      "anti_pattern": "What NOT to do / common mistake this technique corrects",
+      "model_specific": "Which model(s) this applies to, or 'universal' if general principle"
+    }
+  ],
+  "prompt_examples": [
+    {
+      "prompt_text": "The full prompt text shown or described in the video",
+      "context": "What this prompt was trying to achieve",
+      "result_quality": "How the creator evaluated the result (good/bad/mixed)",
+      "improvement_notes": "Any refinements or iterations shown"
+    }
+  ],
+  "principles": [
+    {
+      "principle": "A filmmaking or generation principle stated or demonstrated",
+      "reasoning": "Why this matters for AI-generated video specifically",
+      "qa_pair": {
+        "question": "A natural question a director might ask that this principle answers",
+        "answer": "The answer, incorporating the principle"
+      }
+    }
+  ],
+  "workflow_steps": [
+    {
+      "step": 1,
+      "action": "What to do",
+      "tool_or_node": "Specific software/node/setting if mentioned",
+      "parameter_notes": "Key parameters or settings"
+    }
+  ],
+  "training_pairs": [
+    {
+      "instruction": "A natural language instruction a user might give to the director's assistant",
+      "response": "The ideal response the assistant should give, incorporating knowledge from this video"
+    }
+  ]
+}
+
+RULES:
+1. ALWAYS include at least 3 training_pairs per video — these are the most valuable for fine-tuning
+2. training_pairs should sound natural, like a filmmaker talking to their AI assistant
+3. Focus on JUDGMENT and REASONING, not just facts ("use a low angle WHEN you want to convey power" not just "low angles exist")
+4. If the video shows before/after comparisons, capture both the problem and the solution
+5. If the video discusses a specific model (LTX, Veo, Wan, etc.), tag it but also extract the UNIVERSAL principle underneath
+6. Prompt examples should be as complete as possible — partial prompts are less useful for training
+7. Anti-patterns are as valuable as patterns — what NOT to do teaches the model judgment
+8. Keep descriptions concise but specific — a 2B model needs dense, clear signal
+```
+
+---
+
+## APPEND WORKFLOW
+
+After Gemini outputs the JSON for a video, you have two options:
+
+### Option A: Manual Append
+Copy the JSON object and paste it into your growing dataset file:
+
+```json
+// director_training_dataset.jsonl (one object per line)
+{"source": {"title": "LTX 2.3 Advanced Techniques"...}, "techniques": [...], ...}
+{"source": {"title": "Veo 3.1 Prompt Masterclass"...}, "techniques": [...], ...}
+```
+
+### Option B: Gemini-Managed Append
+Say to Gemini: "Add this to the running dataset" — and it will maintain
+the growing array in its context. When you're done for the session, say
+"Export the full dataset" and it will output the complete array.
+
+### Option C: Google Drive Append (if using Gemini with Drive)
+"Append this entry to my file director_training_data.jsonl in Google Drive"
+
+---
+
+## QUICK COMMANDS (say these to Gemini while watching)
+
+| Command | What It Does |
+|---------|-------------|
+| "Extract training data from this video" | Full extraction using the schema above |
+| "Just the prompts from this video" | Only the prompt_examples array |
+| "What are the anti-patterns here?" | Focus on what NOT to do |
+| "Training pairs only" | Just the instruction/response pairs for fine-tuning |
+| "Add to dataset" | Appends to the running session dataset |
+| "Export full dataset" | Outputs everything collected this session |
+| "How many entries so far?" | Count of videos processed this session |
+
+---
+
+## CONVERTING TO FINE-TUNE FORMAT
+
+When you're ready to train, convert the dataset to the format your training
+framework expects. For Qwen 3.5 with Unsloth or similar:
+
+```python
+import json
+
+# Load your collected data
+with open("director_training_data.jsonl") as f:
+    entries = [json.loads(line) for line in f if line.strip()]
+
+# Extract all training pairs
+training_data = []
+for entry in entries:
+    for pair in entry.get("training_pairs", []):
+        training_data.append({
+            "instruction": pair["instruction"],
+            "output": pair["response"],
+            "system": "You are an expert AI film director's assistant. You help filmmakers construct shots, write prompts for AI video generation, maintain visual continuity, and make creative decisions about camera work, lighting, composition, and audio design."
+        })
+    
+    # Also convert QA pairs from principles
+    for principle in entry.get("principles", []):
+        if principle.get("qa_pair"):
+            training_data.append({
+                "instruction": principle["qa_pair"]["question"],
+                "output": principle["qa_pair"]["answer"],
+                "system": "You are an expert AI film director's assistant."
+            })
+
+# Save as JSONL for training
+with open("director_finetune_ready.jsonl", "w") as f:
+    for item in training_data:
+        f.write(json.dumps(item) + "\n")
+
+print(f"Generated {len(training_data)} training pairs from {len(entries)} videos")
+```
+
+---
+
+## DATASET QUALITY CHECKLIST
+
+Before training, verify your dataset has good coverage:
+
+| Category | Minimum Entries | Why |
+|----------|----------------|-----|
+| prompt_craft | 200+ | Core skill — translating vision to text |
+| camera_work | 100+ | Shot selection and movement |
+| continuity | 50+ | Multi-shot coherence |
+| lighting | 50+ | Mood and atmosphere control |
+| composition | 50+ | Frame balance and visual weight |
+| audio_design | 30+ | Sound-image relationship |
+| workflow | 30+ | Tool-specific knowledge |
+| anti_patterns | 100+ | Judgment — knowing what NOT to do |
+
+```python
+# Quick coverage check
+from collections import Counter
+categories = Counter()
+for entry in entries:
+    for tech in entry.get("techniques", []):
+        categories[tech["category"]] += 1
+for cat, count in categories.most_common():
+    print(f"  {cat}: {count}")
+```
